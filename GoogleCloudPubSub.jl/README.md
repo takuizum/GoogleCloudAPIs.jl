@@ -1,6 +1,9 @@
 # GoogleCloudPubSub.jl
 
-Google Cloud Pub/Sub client for Julia. Part of the [GoogleCloud2.jl](../README.md) monorepo.
+
+[![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml) [![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+
+Google Cloud Pub/Sub client for Julia. Part of the [GoogleCloudAPIs.jl](../README.md) monorepo.
 
 ## Features
 

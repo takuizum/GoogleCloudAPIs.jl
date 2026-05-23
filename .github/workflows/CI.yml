@@ -156,6 +156,12 @@ jobs:
             Pkg.test("${{ matrix.package }}")
           '
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
       # 失敗時のデバッグ用ログ出力
       - name: Dump Emulator Logs
         if: failure() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub')

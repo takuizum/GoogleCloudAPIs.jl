@@ -1,3 +1,9 @@
+"""
+    Topic
+
+A Cloud Pub/Sub topic. The `name` field is the fully-qualified resource name:
+`"projects/{project}/topics/{id}"`.
+"""
 struct Topic
     name::String  # fully-qualified: "projects/{project}/topics/{id}"
 end

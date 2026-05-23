@@ -1,11 +1,11 @@
 name = "GoogleCloudStorage"
-uuid = "d3c1a3e5-8b2d-4c3a-9e1b-8f7a6c5d4b3a"
-authors = ["Agent"]
+uuid = "7a95fb5f-a5a2-4f82-9cda-bd4cc307a60f"
+authors = ["Takumi Itamiya"]
 version = "0.1.0"
 
 [deps]
-GoogleApiCore = "e8a34d8d-6a12-4f7a-8f6a-37e4c9e3b8b1"
-GoogleAuth = "1e860953-b3c9-4f76-86d3-2f9eb8b52f6f"
+GoogleApiCore = "5b46693f-3346-4d48-b018-2afc076565e2"
+GoogleAuth = "c7034c12-f568-48fa-9679-9976dce9d37e"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
@@ -29,4 +29,3 @@ StructTypes = "1"
 URIs = "1"
 Test = "1"
 Aqua = "0.8"
-Sockets = "1"

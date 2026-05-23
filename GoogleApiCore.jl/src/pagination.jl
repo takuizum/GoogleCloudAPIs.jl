@@ -36,10 +36,22 @@ end
 # get_next_token(p::MyApiPage) = p.next_page_token
 
 # Fallback functions that concrete types should override
+"""
+    get_items(page::AbstractPage) -> Vector
+
+Return the list of items contained in the current page.
+Concrete `AbstractPage` subtypes must implement this method.
+"""
 function get_items(page::AbstractPage)
     error("get_items not implemented for $(typeof(page))")
 end
 
+"""
+    get_next_token(page::AbstractPage) -> Union{String, Nothing}
+
+Return the pagination token for the next page, or `nothing` if this is the
+last page. Concrete `AbstractPage` subtypes must implement this method.
+"""
 function get_next_token(page::AbstractPage)
     error("get_next_token not implemented for $(typeof(page))")
 end

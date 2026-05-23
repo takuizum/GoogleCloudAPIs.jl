@@ -1,3 +1,10 @@
+"""
+    Subscription
+
+A Cloud Pub/Sub pull subscription. Both `name` and `topic` are fully-qualified
+resource names (`"projects/{project}/subscriptions/{id}"` and
+`"projects/{project}/topics/{id}"` respectively).
+"""
 struct Subscription
     name::String   # fully-qualified: "projects/{project}/subscriptions/{id}"
     topic::String  # fully-qualified topic resource name

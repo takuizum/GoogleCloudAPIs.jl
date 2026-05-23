@@ -11,8 +11,17 @@ on:
 
 jobs:
   TagBot:
+    name: TagBot (${{ matrix.subdir }})
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        subdir:
+          - GoogleAuth.jl
+          - GoogleApiCore.jl
+          - GoogleCloudStorage.jl
+          - BigQuery.jl
+          - GoogleCloudPubSub.jl
     permissions:
       actions: read
       checks: read
@@ -30,3 +39,4 @@ jobs:
       - uses: JuliaRegistries/TagBot@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          subdir: ${{ matrix.subdir }}

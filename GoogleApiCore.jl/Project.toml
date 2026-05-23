@@ -1,6 +1,6 @@
 name = "GoogleApiCore"
-uuid = "e8a34d8d-6a12-4f7a-8f6a-37e4c9e3b8b1"
-authors = ["Agent"]
+uuid = "5b46693f-3346-4d48-b018-2afc076565e2"
+authors = ["Takumi Itamiya"]
 version = "0.1.0"
 
 [deps]
@@ -11,8 +11,8 @@ StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [targets]
 test = ["Test", "Aqua", "Sockets", "JSON3"]
@@ -24,4 +24,3 @@ JSON3 = "1"
 StructTypes = "1"
 Test = "1"
 Aqua = "0.8"
-Sockets = "1"

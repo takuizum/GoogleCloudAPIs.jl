@@ -1,142 +1,196 @@
-# %% [markdown]
-# # GoogleCloud2.jl Practical Workflow Test
-# 
-# このノートブックは `config.json` を読み込み、Google Cloud上にテスト用のリソースを自動構築した上で、
-# 開発中の `GoogleCloud2.jl` ライブラリを使って実機検証を行います。
-# 
-# **事前準備:**
-# 1. Google Cloud 上に検証用のプロジェクト（無料枠を利用）を作成する
-# 2. `gcloud auth application-default login` でローカルADC認証を済ませる
-# 3. `config.json` の `project_id` と `bucket_name`（世界で一意である必要あり）を修正する
+# GoogleCloudAPIs.jl — Practical Workflow Example
+#
+# Demonstrates the full API surface against a real GCP project using ADC.
+#
+# Pre-requisites:
+#   1. Authenticate: gcloud auth application-default login
+#   2. Set PROJECT_ID below or export the env variable GOOGLE_CLOUD_PROJECT.
+#   3. Run: julia --project=.. examples/01_practical_workflow.jl
+#
+# Nothing is committed to git from this directory.
 
-# %%
-using JSON3
 using Pkg
+Pkg.activate(joinpath(@__DIR__, ".."))
 
-# プロジェクトのルートディレクトリの環境を有効化
-Pkg.activate("..")
+import GoogleAuth
+import BigQuery
+import GoogleCloudStorage
+import GoogleCloudPubSub
+using Dates
 
-using GoogleAuth
-using GoogleCloudStorage
-using BigQuery
-using GoogleCloudPubSub
+const PROJECT_ID = get(ENV, "GOOGLE_CLOUD_PROJECT", "YOUR_PROJECT_ID")
 
-# %% [markdown]
-# ## 1. 設定の読み込みと自動プロビジョニング
-# `config.json` から設定を読み込み、`gcloud` および `bq` コマンドを用いてリソースを自動作成します。
-# 既に存在する場合はスキップされるように idempotent（冪等）なコマンドを使用します。
-
-# %%
-config_path = "config.json"
-config = JSON3.read(read(config_path, String))
-
-project_id = config.project_id
-location = config.location
-bucket_name = config.storage.bucket_name
-dataset_id = config.bigquery.dataset_id
-topic_id = config.pubsub.topic_id
-
-println("=== Provisioning GCP Resources ===")
-println("Project ID: $project_id")
-
-# %% [markdown]
-# ### Storage バケットの作成
-# %%
-try
-    run(`gcloud storage buckets create gs://$bucket_name --project=$project_id --location=$location`)
-    println("✅ Bucket created: $bucket_name")
-catch e
-    println("⚠️ Bucket already exists or failed to create. Proceeding...")
+function section(title)
+    println("\n" * "─"^50)
+    println("  $title")
+    println("─"^50)
 end
 
-# %% [markdown]
-# ### BigQuery データセットとテーブルの作成
-# %%
+println("=== GoogleCloudAPIs.jl practical workflow (project=$PROJECT_ID) ===")
+
+# ─────────────────────────────────────────────────────────────
+# 1. Authentication — Application Default Credentials
+# ─────────────────────────────────────────────────────────────
+section("Auth")
+creds = GoogleAuth.get_application_default()
+token = GoogleAuth.get_token(creds)
+println("  token_type=$(token.token_type), expires_in=$(token.expires_in)s")
+
+# ─────────────────────────────────────────────────────────────
+# 2. BigQuery — simple query
+# ─────────────────────────────────────────────────────────────
+section("BigQuery: simple query")
+bq = BigQuery.BQClient(PROJECT_ID; creds=creds)
+
+rows = BigQuery.query(bq, "SELECT 1 AS num, 'hello' AS msg")
+println("  SELECT 1 => $(rows[1])")
+
+# Arrow format (client-side JSON→Arrow conversion)
+tbl = BigQuery.query(bq, "SELECT 1 AS x, 'a' AS s UNION ALL SELECT 2, 'b'"; format=:arrow)
+println("  Arrow rows: $(length(collect(tbl.x)))")
+
+# ─────────────────────────────────────────────────────────────
+# 3. BigQuery — dataset + table CRUD
+# ─────────────────────────────────────────────────────────────
+section("BigQuery: dataset + table lifecycle")
+
+suffix = lowercase(string(round(Int, time()), base=16))
+ds_id  = "gc2jl_example_$(suffix)"
+tbl_id = "events"
+
 try
-    run(`bq --project_id=$project_id mk --dataset --location=$location $dataset_id`)
-    println("✅ Dataset created: $dataset_id")
-catch e
-    println("⚠️ Dataset already exists or failed to create. Proceeding...")
+    ds = BigQuery.create_dataset(bq, ds_id; location="US")
+    println("  create_dataset => $(ds.dataset_id) ($(ds.location))")
+
+    schema = [
+        BigQuery.TableFieldSchema("id",   "INT64";  mode="REQUIRED"),
+        BigQuery.TableFieldSchema("name", "STRING"),
+        BigQuery.TableFieldSchema("ts",   "TIMESTAMP"),
+    ]
+    t = BigQuery.create_table(bq, ds_id, tbl_id, schema)
+    println("  create_table   => $(t.table_id) ($(length(t.schema)) fields)")
+
+    listed = collect(BigQuery.list_tables(bq, ds_id))
+    println("  list_tables    => $(length(listed)) table(s)")
+
+    BigQuery.query(bq, """
+        INSERT INTO `$PROJECT_ID.$ds_id.$tbl_id` (id, name, ts)
+        VALUES (1, 'Alice', CURRENT_TIMESTAMP()),
+               (2, 'Bob',   CURRENT_TIMESTAMP())
+    """)
+    println("  INSERT OK")
+
+    result = BigQuery.query(bq, "SELECT id, name FROM `$PROJECT_ID.$ds_id.$tbl_id` ORDER BY id")
+    println("  SELECT => $([r.name for r in result])")
+finally
+    try; BigQuery.delete_table(bq, ds_id, tbl_id);            println("  delete_table OK");   catch; end
+    try; BigQuery.delete_dataset(bq, ds_id; delete_contents=true); println("  delete_dataset OK"); catch; end
 end
 
-for table in config.bigquery.tables
-    t_id = table.table_id
-    schema = table.schema
-    try
-        run(`bq --project_id=$project_id mk --table $dataset_id.$t_id $schema`)
-        println("✅ Table created: $t_id")
-    catch e
-        println("⚠️ Table already exists or failed to create. Proceeding...")
+# ─────────────────────────────────────────────────────────────
+# 4. Cloud Storage — bucket + object lifecycle
+# ─────────────────────────────────────────────────────────────
+section("Cloud Storage: bucket + object lifecycle")
+gcs = GoogleCloudStorage.Client(PROJECT_ID; creds=creds)
+
+bucket_name = "gc2jl-example-$(PROJECT_ID)-$(suffix)"[1:min(end, 63)]
+
+try
+    b = GoogleCloudStorage.create_bucket(gcs, bucket_name; location="US")
+    println("  create_bucket  => $(b.name)")
+
+    payload = "Hello from GoogleCloudAPIs.jl @ $(now())"
+    obj = GoogleCloudStorage.upload_object(gcs, bucket_name, "hello.txt",
+                                           payload; content_type="text/plain")
+    println("  upload_object  => $(obj.name) ($(obj.size) bytes)")
+
+    downloaded = GoogleCloudStorage.download_object(gcs, bucket_name, "hello.txt")
+    @assert String(downloaded) == payload
+    println("  download_object matches")
+
+    GoogleCloudStorage.upload_object(gcs, bucket_name, "data.bin", UInt8[0xDE, 0xAD, 0xBE, 0xEF])
+    bytes_back = GoogleCloudStorage.download_object(gcs, bucket_name, "data.bin")
+    @assert bytes_back == UInt8[0xDE, 0xAD, 0xBE, 0xEF]
+    println("  binary round-trip OK")
+
+    objs = collect(GoogleCloudStorage.list_objects(gcs, bucket_name))
+    println("  list_objects   => $(length(objs)) object(s)")
+
+    md = GoogleCloudStorage.get_object(gcs, bucket_name, "hello.txt")
+    println("  get_object     => content_type=$(md.content_type)")
+
+    for o in objs
+        GoogleCloudStorage.delete_object(gcs, bucket_name, o.name)
+    end
+    println("  delete_object  x$(length(objs))")
+finally
+    try; GoogleCloudStorage.delete_bucket(gcs, bucket_name); println("  delete_bucket OK"); catch; end
+end
+
+# ─────────────────────────────────────────────────────────────
+# 5. Pub/Sub — topic + subscription + publish + pull
+# ─────────────────────────────────────────────────────────────
+section("Pub/Sub: topic + subscription + publish + pull")
+ps = GoogleCloudPubSub.PubSubClient(project=PROJECT_ID, creds=creds)
+
+topic_id = "gc2jl-example-topic-$suffix"
+sub_id   = "gc2jl-example-sub-$suffix"
+
+# Pre-flight: skip cleanly if Pub/Sub API is not enabled
+try
+    GoogleCloudPubSub.list_topics(ps) |> iterate
+catch e
+    if occursin("SERVICE_DISABLED", sprint(showerror, e)) ||
+       occursin("has not been used in project", sprint(showerror, e))
+        @warn "Pub/Sub API is not enabled on $(PROJECT_ID). Enable it in the GCP Console."
+        println("\n=== Workflow complete (Pub/Sub skipped) ===")
+        exit(0)
+    else
+        rethrow(e)
     end
 end
 
-# %% [markdown]
-# ### Pub/Sub トピックの作成
-# %%
 try
-    run(`gcloud pubsub topics create $topic_id --project=$project_id`)
-    println("✅ Topic created: $topic_id")
-catch e
-    println("⚠️ Topic already exists or failed to create. Proceeding...")
+    topic = GoogleCloudPubSub.create_topic(ps, topic_id)
+    println("  create_topic   => $(topic.name)")
+
+    sub = GoogleCloudPubSub.create_subscription(ps, sub_id, topic_id; ack_deadline_seconds=30)
+    println("  create_sub     => $(sub.name)")
+
+    # Single publish
+    mid = GoogleCloudPubSub.publish(ps, topic_id, "hello from julia";
+                                    attributes=Dict("src" => "example"))
+    println("  publish single => $mid")
+
+    # Batch publish
+    ids = GoogleCloudPubSub.publish(ps, topic_id, [
+        GoogleCloudPubSub.PubSubMessage("batch-1"),
+        GoogleCloudPubSub.PubSubMessage("batch-2"; attributes=Dict("priority" => "low")),
+    ])
+    println("  publish batch  => $(length(ids)) ids")
+
+    # Pull with retries
+    received = GoogleCloudPubSub.PubSubMessage[]
+    for _ in 1:10
+        batch = GoogleCloudPubSub.pull(ps, sub_id; max_messages=10, return_immediately=true)
+        append!(received, batch)
+        length(received) >= 3 && break
+        sleep(1)
+    end
+    println("  pull           => $(length(received)) message(s)")
+
+    ack_ids = [m.ack_id for m in received if m.ack_id !== nothing]
+    if !isempty(ack_ids)
+        GoogleCloudPubSub.acknowledge(ps, sub_id, ack_ids)
+        println("  acknowledge    => $(length(ack_ids)) ack_id(s)")
+    end
+
+    for m in received
+        println("    data=$(String(m.data))  attrs=$(m.attributes)")
+    end
+finally
+    try; GoogleCloudPubSub.delete_subscription(ps, sub_id);   println("  delete_sub OK");   catch; end
+    try; GoogleCloudPubSub.delete_topic(ps, topic_id);         println("  delete_topic OK"); catch; end
 end
 
-println("\n🎉 Provisioning Complete!")
-
-# %% [markdown]
-# ## 2. ライブラリ (GoogleCloud2.jl) を用いた実動作テスト
-# リソースが準備できたので、ここから先は今回開発している Julia ライブラリを使ってアクセスします。
-
-# %%
-# 認証情報の取得（Application Default Credentials）
-println("--- 認証情報の取得 ---")
-creds = get_application_default()
-println("認証成功: ", typeof(creds))
-
-# %%
-# Cloud Storage へのアクセス
-println("\n--- Cloud Storage 検証 ---")
-# ※ 現在のGoogleCloudStorageモジュールはプロトタイプ実装です
-storage_client = GoogleCloudStorage.Client(project_id)
-bucket = GoogleCloudStorage.get_bucket(storage_client, bucket_name)
-println("取得したバケット名: ", bucket.name)
-
-# %%
-# BigQuery へのアクセス
-println("\n--- BigQuery 検証 ---")
-# ※ Arrow.jl を用いたクエリ発行のプロトタイプ実装
-bq_client = BigQuery.BQClient(project_id)
-query = "SELECT CURRENT_TIMESTAMP() as now, 'Hello from Julia' as message"
-result_table = BigQuery.query_arrow(bq_client, query)
-println("BigQuery クエリ実行完了")
-
-# %%
-# Pub/Sub へのアクセス
-println("\n--- Pub/Sub 検証 ---")
-pubsub_client = PubSubClient(project=project_id, endpoint="https://pubsub.googleapis.com")
-# 実環境でトピックを作成/取得する処理
-# ※ GCP環境に対して直接リクエストを飛ばすため、通信ロジックが実装されている必要があります。
-# topic = create_topic(pubsub_client, topic_id)
-println("PubSub クライアント初期化完了")
-
-# %% [markdown]
-# ## 3. リソースのクリーンアップ（オプション）
-# 使い終わったダミーリソースを削除して、課金を完全に防ぎます。
-
-# %%
-# 以下のフラグを true にするとリソースが削除されます
-RUN_CLEANUP = false
-
-if RUN_CLEANUP
-    println("=== Cleaning up GCP Resources ===")
-    
-    # Bucketの削除
-    try run(`gcloud storage rm --recursive gs://$bucket_name`); catch; end
-    
-    # Datasetの削除
-    try run(`bq --project_id=$project_id rm -r -f $dataset_id`); catch; end
-    
-    # Topicの削除
-    try run(`gcloud pubsub topics delete $topic_id --project=$project_id`); catch; end
-    
-    println("🎉 Cleanup Complete!")
-end
+println("\n=== All examples completed successfully ===")

@@ -1,6 +1,9 @@
 # GoogleApiCore.jl
 
-Shared infrastructure for Google Cloud REST API clients. Part of the [GoogleCloud2.jl](../README.md) monorepo.
+
+[![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml) [![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+
+Shared infrastructure for Google Cloud REST API clients. Part of the [GoogleCloudAPIs.jl](../README.md) monorepo.
 
 This package contains the cross-cutting concerns that every Google API client needs but should not re-implement:
 

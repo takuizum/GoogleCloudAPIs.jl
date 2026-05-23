@@ -1,3 +1,10 @@
+"""
+    Object
+
+Metadata for an object stored in Google Cloud Storage.
+
+Fields: `bucket`, `name`, `size` (bytes), `content_type`, `generation`.
+"""
 struct Object
     bucket::String
     name::String

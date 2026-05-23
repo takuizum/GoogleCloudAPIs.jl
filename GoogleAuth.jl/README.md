@@ -1,6 +1,9 @@
 # GoogleAuth.jl
 
-Authentication primitives for the Google Cloud Platform. Part of the [GoogleCloud2.jl](../README.md) monorepo.
+
+[![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml) [![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+
+Authentication primitives for the Google Cloud Platform. Part of the [GoogleCloudAPIs.jl](../README.md) monorepo.
 
 ## Features
 

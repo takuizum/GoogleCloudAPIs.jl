@@ -1,4 +1,10 @@
-# GoogleCloud2.jl
+# GoogleCloudAPIs.jl
+
+[![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml)
+[![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://takuizum.github.io/GoogleCloudAPIs.jl/stable)
+[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://takuizum.github.io/GoogleCloudAPIs.jl/dev)
+[![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Modern Julia client libraries for Google Cloud Platform, organized as a monorepo of focused sub-packages.
 

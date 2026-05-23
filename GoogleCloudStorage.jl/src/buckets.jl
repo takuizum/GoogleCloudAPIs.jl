@@ -1,3 +1,10 @@
+"""
+    Bucket
+
+Metadata for a Google Cloud Storage bucket.
+
+Fields: `name`, `location` (e.g. `"US"`), `storage_class` (e.g. `"STANDARD"`).
+"""
 struct Bucket
     name::String
     location::Union{String, Nothing}

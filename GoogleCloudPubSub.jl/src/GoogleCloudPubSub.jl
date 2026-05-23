@@ -15,6 +15,15 @@ export publish
 export create_subscription, delete_subscription, get_subscription, list_subscriptions
 export pull, acknowledge
 
+"""
+    PubSubClient(; project, creds=nothing, endpoint=nothing)
+    PubSubClient(project; creds=nothing, endpoint=nothing)
+
+A Cloud Pub/Sub REST API client.
+
+If `PUBSUB_EMULATOR_HOST` is set in the environment and `endpoint` is not
+explicitly provided, the client targets the emulator with no authentication.
+"""
 struct PubSubClient
     project::String
     creds::Union{GoogleAuth.Credentials, Nothing}

@@ -1,5 +1,19 @@
 # retry.jl
 
+"""
+    RetryConfig(; initial_delay=1.0, multiplier=2.0, max_delay=60.0, max_attempts=5)
+
+Configuration for exponential-backoff retry behaviour.
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `initial_delay` | `1.0` | Seconds before the first retry |
+| `multiplier` | `2.0` | Delay multiplied by this on each subsequent attempt |
+| `max_delay` | `60.0` | Upper bound on per-attempt sleep time |
+| `max_attempts` | `5` | Maximum total attempts (including the first) |
+
+A 10% random jitter is added to each delay to reduce thundering-herd effects.
+"""
 Base.@kwdef struct RetryConfig
     initial_delay::Float64 = 1.0
     multiplier::Float64 = 2.0
@@ -50,8 +64,12 @@ function do_request_with_retry(method::String, url::String, headers=[], body="";
                             status_exception=false, kwargs...)
 
         if attempt >= config.max_attempts || !should_retry(method, resp.status)
-            if resp.status >= 400
-                error("HTTP Request failed with status $(resp.status): $(String(resp.body))")
+            if resp.status == 401 || resp.status == 403
+                throw(AuthError("$(resp.status): $(String(resp.body))"))
+            elseif resp.status == 404
+                throw(NotFoundError(url))
+            elseif resp.status >= 400
+                throw(GoogleAPIError(resp.status, String(resp.body)))
             end
             return resp
         end

@@ -1,6 +1,6 @@
 name = "GoogleAuth"
-uuid = "1e860953-b3c9-4f76-86d3-2f9eb8b52f6f"
-authors = ["Agent"]
+uuid = "c7034c12-f568-48fa-9679-9976dce9d37e"
+authors = ["Takumi Itamiya"]
 version = "0.1.0"
 
 [deps]
@@ -31,8 +31,3 @@ StructTypes = "1"
 URIs = "1"
 Test = "1"
 Aqua = "0.8"
-Base64 = "1"
-Dates = "1"
-Random = "1"
-SHA = "0.7"
-Sockets = "1"
