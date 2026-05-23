@@ -1,0 +1,19 @@
+{
+  "project_id": "YOUR_GCP_PROJECT_ID",
+  "location": "US",
+  "storage": {
+    "bucket_name": "julia-sdk-test-bucket-12345"
+  },
+  "bigquery": {
+    "dataset_id": "julia_sdk_test_db",
+    "tables": [
+      {
+        "table_id": "sensor_data",
+        "schema": "timestamp:TIMESTAMP,sensor_id:STRING,temperature:FLOAT"
+      }
+    ]
+  },
+  "pubsub": {
+    "topic_id": "julia-sdk-test-topic"
+  }
+}

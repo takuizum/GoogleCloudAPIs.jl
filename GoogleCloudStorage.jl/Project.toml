@@ -1,0 +1,32 @@
+name = "GoogleCloudStorage"
+uuid = "d3c1a3e5-8b2d-4c3a-9e1b-8f7a6c5d4b3a"
+authors = ["Agent"]
+version = "0.1.0"
+
+[deps]
+GoogleApiCore = "e8a34d8d-6a12-4f7a-8f6a-37e4c9e3b8b1"
+GoogleAuth = "1e860953-b3c9-4f76-86d3-2f9eb8b52f6f"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+
+[targets]
+test = ["Test", "Aqua", "Sockets"]
+
+[compat]
+julia = "1.9"
+GoogleApiCore = "0.1"
+GoogleAuth = "0.1"
+HTTP = "1"
+JSON3 = "1"
+StructTypes = "1"
+URIs = "1"
+Test = "1"
+Aqua = "0.8"
+Sockets = "1"

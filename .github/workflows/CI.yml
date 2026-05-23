@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags: ['*']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. 静的解析・コード品質チェック（高速・エミュレータ不要）
+  # ──────────────────────────────────────────────
+  lint:
+    name: Aqua Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+
+      - name: Run Aqua.jl on all packages
+        run: |
+          julia --project=. -e '
+            using Pkg
+            Pkg.develop([
+              PackageSpec(path="GoogleAuth.jl"),
+              PackageSpec(path="GoogleApiCore.jl"),
+              PackageSpec(path="GoogleCloudStorage.jl"),
+              PackageSpec(path="BigQuery.jl"),
+              PackageSpec(path="GoogleCloudPubSub.jl"),
+            ])
+            Pkg.add("Aqua")
+            Pkg.instantiate()
+
+            using Aqua
+            using GoogleAuth, GoogleApiCore, GoogleCloudStorage, BigQuery, GoogleCloudPubSub
+
+            @info "Testing GoogleAuth..."
+            Aqua.test_all(GoogleAuth; ambiguities=false)
+            @info "Testing GoogleApiCore..."
+            Aqua.test_all(GoogleApiCore; ambiguities=false)
+            @info "Testing GoogleCloudStorage..."
+            Aqua.test_all(GoogleCloudStorage; ambiguities=false)
+            @info "Testing BigQuery..."
+            Aqua.test_all(BigQuery; ambiguities=false)
+            @info "Testing GoogleCloudPubSub..."
+            Aqua.test_all(GoogleCloudPubSub; ambiguities=false)
+          '
+
+  # ──────────────────────────────────────────────
+  # 2. パッケージ別・Juliaバージョン別の並列テスト
+  # ──────────────────────────────────────────────
+  test:
+    needs: lint
+    name: Test ${{ matrix.package }} - Julia ${{ matrix.julia-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ['1.9', '1.10']
+        package:
+          - GoogleAuth
+          - GoogleApiCore
+          - GoogleCloudStorage
+          - BigQuery
+          - GoogleCloudPubSub
+
+    env:
+      JULIA_NUM_THREADS: auto
+      PUBSUB_EMULATOR_HOST: "localhost:8085"
+      STORAGE_EMULATOR_HOST: "http://localhost:4443"
+      BIGQUERY_EMULATOR_HOST: "http://localhost:9050"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+
+      - uses: julia-actions/cache@v2
+
+      # エミュレータをバックグラウンド起動
+      - name: Start GCP Emulators
+        run: |
+          docker compose up -d
+          echo "Waiting for emulators to become ready..."
+          # Pub/Sub エミュレータの起動を待機
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8085 > /dev/null 2>&1; then
+              echo "Pub/Sub emulator is ready."
+              break
+            fi
+            echo "  attempt $i/15 ..."
+            sleep 2
+          done
+          # GCS エミュレータの起動を待機
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:4443/storage/v1/b > /dev/null 2>&1; then
+              echo "GCS emulator is ready."
+              break
+            fi
+            echo "  attempt $i/10 ..."
+            sleep 2
+          done
+          # BigQuery エミュレータの起動を待機
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:9050/bigquery/v2/projects/test-project > /dev/null 2>&1; then
+              echo "BigQuery emulator is ready."
+              break
+            fi
+            echo "  attempt $i/10 ..."
+            sleep 2
+          done
+          docker compose ps
+
+      # テスト実行
+      - name: Run ${{ matrix.package }} Tests
+        run: |
+          julia --project=. -e '
+            using Pkg
+            Pkg.develop(path="${{ matrix.package }}.jl")
+            Pkg.instantiate()
+            Pkg.test("${{ matrix.package }}")
+          '
+
+      # 失敗時のデバッグ用ログ出力
+      - name: Dump Emulator Logs
+        if: failure()
+        run: docker compose logs --tail=100
+
+      - name: Stop Emulators
+        if: always()
+        run: docker compose down

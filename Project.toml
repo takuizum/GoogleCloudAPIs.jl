@@ -1,0 +1,9 @@
+[workspace]
+projects = ["GoogleAuth.jl", "GoogleApiCore.jl", "GoogleCloudStorage.jl", "BigQuery.jl", "GoogleCloudPubSub.jl"]
+
+[deps]
+BigQuery = "c4d2b1a0-7f9e-4d8c-bc5a-6e3d2f1b0a9c"
+GoogleApiCore = "e8a34d8d-6a12-4f7a-8f6a-37e4c9e3b8b1"
+GoogleAuth = "1e860953-b3c9-4f76-86d3-2f9eb8b52f6f"
+GoogleCloudPubSub = "b5e3c2d1-0a9b-4c8d-af6e-7d4f3b2a1c0e"
+GoogleCloudStorage = "d3c1a3e5-8b2d-4c3a-9e1b-8f7a6c5d4b3a"
