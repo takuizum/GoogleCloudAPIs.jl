@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        julia-version: ['1.9', '1.10']
+        julia-version: ['1.10', '1.11']
         package:
           - GoogleAuth
           - GoogleApiCore
@@ -74,6 +74,8 @@ jobs:
 
     env:
       JULIA_NUM_THREADS: auto
+      # Tell each package's test runner to skip the docker-spawn branch and
+      # use the emulators we start at the job level.
       PUBSUB_EMULATOR_HOST: "localhost:8085"
       STORAGE_EMULATOR_HOST: "http://localhost:4443"
       BIGQUERY_EMULATOR_HOST: "http://localhost:9050"
@@ -87,55 +89,78 @@ jobs:
 
       - uses: julia-actions/cache@v2
 
-      # エミュレータをバックグラウンド起動
+      # ──────────────────────────────────────────────
+      # エミュレータを起動して接続可能になるまで待機
+      # ──────────────────────────────────────────────
       - name: Start GCP Emulators
+        if: matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub'
         run: |
           docker compose up -d
           echo "Waiting for emulators to become ready..."
-          # Pub/Sub エミュレータの起動を待機
-          for i in $(seq 1 15); do
-            if curl -sf http://localhost:8085 > /dev/null 2>&1; then
-              echo "Pub/Sub emulator is ready."
-              break
+
+          # Pub/Sub: '/' は 405 を返すので nc でポート疎通だけ確認
+          ready=0
+          for i in $(seq 1 30); do
+            if nc -z localhost 8085; then
+              echo "Pub/Sub emulator is listening."
+              ready=1; break
             fi
-            echo "  attempt $i/15 ..."
+            echo "  pubsub attempt $i/30 ..."
             sleep 2
           done
-          # GCS エミュレータの起動を待機
-          for i in $(seq 1 10); do
-            if curl -sf http://localhost:4443/storage/v1/b > /dev/null 2>&1; then
+          [ $ready -eq 1 ] || { echo "::error::Pub/Sub emulator failed to start"; docker compose logs pubsub-emulator; exit 1; }
+
+          # GCS: discovery-like endpoint should give 200 with project param
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" "http://localhost:4443/storage/v1/b?project=test-project" | grep -q "^2"; then
               echo "GCS emulator is ready."
-              break
+              ready=1; break
             fi
-            echo "  attempt $i/10 ..."
+            echo "  gcs attempt $i/30 ..."
             sleep 2
           done
-          # BigQuery エミュレータの起動を待機
-          for i in $(seq 1 10); do
-            if curl -sf http://localhost:9050/bigquery/v2/projects/test-project > /dev/null 2>&1; then
+          [ $ready -eq 1 ] || { echo "::error::GCS emulator failed to start"; docker compose logs gcs-emulator; exit 1; }
+
+          # BigQuery: discovery doc is unauthenticated and returns 200
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9050/discovery/v1/apis/bigquery/v2/rest" | grep -q "^2"; then
               echo "BigQuery emulator is ready."
-              break
+              ready=1; break
             fi
-            echo "  attempt $i/10 ..."
+            echo "  bq attempt $i/30 ..."
             sleep 2
           done
+          [ $ready -eq 1 ] || { echo "::error::BigQuery emulator failed to start"; docker compose logs bigquery-emulator; exit 1; }
+
           docker compose ps
 
-      # テスト実行
+      # ──────────────────────────────────────────────
+      # テスト実行 — 各サブパッケージを単独で develop して test
+      # ──────────────────────────────────────────────
       - name: Run ${{ matrix.package }} Tests
         run: |
           julia --project=. -e '
             using Pkg
-            Pkg.develop(path="${{ matrix.package }}.jl")
+            # Develop all sibling packages so inter-package UUIDs resolve locally
+            # (root Project.toml lists each one as a [deps] entry by UUID).
+            Pkg.develop([
+              PackageSpec(path="GoogleAuth.jl"),
+              PackageSpec(path="GoogleApiCore.jl"),
+              PackageSpec(path="GoogleCloudStorage.jl"),
+              PackageSpec(path="BigQuery.jl"),
+              PackageSpec(path="GoogleCloudPubSub.jl"),
+            ])
             Pkg.instantiate()
             Pkg.test("${{ matrix.package }}")
           '
 
       # 失敗時のデバッグ用ログ出力
       - name: Dump Emulator Logs
-        if: failure()
-        run: docker compose logs --tail=100
+        if: failure() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub')
+        run: docker compose logs --tail=200
 
       - name: Stop Emulators
-        if: always()
-        run: docker compose down
+        if: always() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub')
+        run: docker compose down --volumes --remove-orphans
