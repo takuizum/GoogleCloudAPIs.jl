@@ -1,17 +1,5 @@
 # adc.jl
 
-# Private struct used only for JSON deserialization of service account key files.
-# Keeps ServiceAccountCredentials immutable (and free of StructTypes) while still
-# allowing JSON3 to parse the well-known Google credential format.
-struct _ServiceAccountJSON
-    project_id::String
-    client_email::String
-    private_key_id::String
-    private_key::String
-    token_uri::String
-end
-StructTypes.StructType(::Type{_ServiceAccountJSON}) = StructTypes.Struct()
-
 """
 Finds the default credentials file path created by `gcloud auth application-default login`.
 """
@@ -39,10 +27,9 @@ function load_credentials_from_file(path::String)
     json_data = JSON3.read(content)
 
     if haskey(json_data, :type) && json_data.type == "service_account"
-        raw = JSON3.read(content, _ServiceAccountJSON)
-        return ServiceAccountCredentials(raw.project_id, raw.client_email,
-                                         raw.private_key_id, raw.private_key,
-                                         raw.token_uri)
+        # ServiceAccountCredentials uses StructTypes.Struct() with a default for
+        # the `scopes` field, so JSON3 can deserialize key files directly.
+        return JSON3.read(content, ServiceAccountCredentials)
     elseif haskey(json_data, :type) && json_data.type == "authorized_user"
         return JSON3.read(content, UserCredentials)
     elseif haskey(json_data, :type) && json_data.type == "external_account"

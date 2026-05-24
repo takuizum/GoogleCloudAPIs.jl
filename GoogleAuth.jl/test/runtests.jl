@@ -542,13 +542,14 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
     @testset "ImpersonatedCredentials get_token (mocked IAM API)" begin
         iam_port = GoogleAuth._free_port()
         received = Ref{Dict{String,Any}}()
+        received_auth = Ref{String}("")
 
-        # Compute an expireTime ~1 hour from now so expires_in ≈ 3600
         expire_dt = Dates.now(UTC) + Dates.Second(3600)
         expire_str = Dates.format(expire_dt, "yyyy-mm-ddTHH:MM:SS") * "Z"
 
         iam_server = HTTP.serve!(iam_port) do req
-            received[] = JSON3.read(String(req.body), Dict{String,Any})
+            received[]      = JSON3.read(String(req.body), Dict{String,Any})
+            received_auth[] = something(HTTP.header(req, "Authorization"), "")
             resp_body = JSON3.write(Dict(
                 "accessToken" => "IMPERSONATED_TOKEN",
                 "expireTime"  => expire_str,
@@ -557,31 +558,49 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
         end
 
         try
-            # Patch the IAM base URL to point at our mock server
-            orig = GoogleAuth._IAM_CREDENTIALS_BASE
-            # We can't monkey-patch a const, so we test via a white-box approach:
-            # build a custom ImpersonatedCredentials and intercept at HTTP level
-            # by overriding ENV is not feasible — instead test the happy path
-            # using a real HTTP mock via HTTP.serve and an overrideable base URL.
-            # Since the const is module-level, we confirm the request format via
-            # the full integration path using HTTP.serve on the expected URL prefix.
+            # _iam_base_url is injected so requests go to the mock server.
+            imp = ImpersonatedCredentials(
+                StubCredentials(),
+                "worker@proj.iam.gserviceaccount.com",
+                ["https://www.googleapis.com/auth/bigquery"];
+                lifetime=600,
+                _iam_base_url="http://127.0.0.1:$iam_port",
+            )
 
-            src = StubCredentials()  # get_token returns Token("stub-access-token", 3600, "Bearer")
-            imp = ImpersonatedCredentials(src, "worker@proj.iam.gserviceaccount.com",
-                                          ["https://www.googleapis.com/auth/bigquery"])
+            token = get_token(imp)
 
-            # Confirm struct fields
-            @test imp.scopes   == ["https://www.googleapis.com/auth/bigquery"]
-            @test imp.lifetime == 3600
+            @test token.access_token == "IMPERSONATED_TOKEN"
+            @test token.token_type   == "Bearer"
+            @test token.expires_in   > 3000  # ≈ 3600 with some tolerance
 
-            # The IAM API call itself requires network; skip live call in unit tests.
-            # We verify the Token parsing logic directly instead:
-            expire_dt2 = Dates.now(UTC) + Dates.Second(1800)
-            expire_str2 = Dates.format(expire_dt2, "yyyy-mm-ddTHH:MM:SS") * "Z"
-            expire_clean = replace(expire_str2, r"(\.\d+)?Z$" => "")
-            parsed_dt = Dates.DateTime(expire_clean, Dates.dateformat"yyyy-mm-ddTHH:MM:SS")
-            computed_expires_in = max(0, round(Int, Dates.datetime2unix(parsed_dt) - time()))
-            @test 1700 <= computed_expires_in <= 1900  # ≈ 1800 with some tolerance
+            # Verify the request body sent to IAM
+            @test received[]["scope"]    == ["https://www.googleapis.com/auth/bigquery"]
+            @test received[]["lifetime"] == "600s"
+
+            # Verify the source token was forwarded as Authorization header
+            @test received_auth[] == "Bearer stub-access-token"
+        finally
+            close(iam_server)
+        end
+    end
+
+    @testset "ImpersonatedCredentials get_token: IAM error is sanitized" begin
+        iam_port = GoogleAuth._free_port()
+        iam_server = HTTP.serve!(iam_port) do _req
+            HTTP.Response(403,
+                ["Content-Type" => "application/json"],
+                """{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}""")
+        end
+        try
+            imp = ImpersonatedCredentials(
+                StubCredentials(), "sa@p.iam", ["scope"];
+                _iam_base_url="http://127.0.0.1:$iam_port",
+            )
+            err = try get_token(imp); nothing catch e; e end
+            @test err !== nothing
+            msg = sprint(showerror, err)
+            @test occursin("Permission denied", msg)
+            @test !occursin("""{"error":{""", msg)  # raw body not leaked
         finally
             close(iam_server)
         end

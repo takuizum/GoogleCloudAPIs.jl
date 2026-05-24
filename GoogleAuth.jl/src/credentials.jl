@@ -72,6 +72,11 @@ struct ServiceAccountCredentials <: Credentials
             String(private_key), String(token_uri), collect(String, scopes))
 end
 
+# Restore JSON3 deserialization compatibility: JSON3.read(json, ServiceAccountCredentials)
+# still works; the `scopes` field (absent in key files) defaults to String[].
+StructTypes.StructType(::Type{ServiceAccountCredentials}) = StructTypes.Struct()
+StructTypes.defaults(::Type{ServiceAccountCredentials}) = (scopes = String[],)
+
 function Base.show(io::IO, c::ServiceAccountCredentials)
     scopes_str = isempty(c.scopes) ? "(default)" : join(c.scopes, ", ")
     print(io, "ServiceAccountCredentials(client_email=$(repr(c.client_email)), " *
@@ -91,7 +96,7 @@ creds = with_scopes(sa, ["https://www.googleapis.com/auth/bigquery"])
 cached = CachedCredentials(creds)
 ```
 """
-with_scopes(c::ServiceAccountCredentials, scopes::Vector{<:AbstractString}) =
+with_scopes(c::ServiceAccountCredentials, scopes::AbstractVector{<:AbstractString}) =
     ServiceAccountCredentials(c.project_id, c.client_email, c.private_key_id,
                               c.private_key, c.token_uri, scopes)
 
@@ -201,7 +206,7 @@ The `source` credentials must have the **Service Account Token Creator**
   `get_application_default()`).
 - `target_principal::String`  — Email of the service account to impersonate
   (e.g. `"sa@project.iam.gserviceaccount.com"`).
-- `scopes::Vector{String}`    — OAuth scopes to request on the impersonated token.
+- `scopes`                    — OAuth scopes to request (any `AbstractVector{<:AbstractString}`).
 - `lifetime::Int=3600`        — Token lifetime in seconds (maximum 3600).
 
 Use `with_scopes(c, scopes)` to change the scopes on an existing
@@ -220,14 +225,17 @@ struct ImpersonatedCredentials <: Credentials
     target_principal::String
     scopes::Vector{String}
     lifetime::Int
+    _iam_base_url::String  # Overrideable for testing; production default is _IAM_CREDENTIALS_BASE
 
     function ImpersonatedCredentials(source::Credentials,
                                      target_principal::AbstractString,
-                                     scopes::Vector{<:AbstractString};
-                                     lifetime::Int=3600)
+                                     scopes::AbstractVector{<:AbstractString};
+                                     lifetime::Int=3600,
+                                     _iam_base_url::AbstractString=_IAM_CREDENTIALS_BASE)
         1 <= lifetime <= 3600 ||
             throw(ArgumentError("lifetime must be between 1 and 3600 seconds"))
-        new(source, String(target_principal), collect(String, scopes), lifetime)
+        new(source, String(target_principal), collect(String, scopes),
+            lifetime, String(_iam_base_url))
     end
 end
 
@@ -236,13 +244,14 @@ function Base.show(io::IO, c::ImpersonatedCredentials)
               "scopes=$(repr(join(c.scopes, ", "))))")
 end
 
-with_scopes(c::ImpersonatedCredentials, scopes::Vector{<:AbstractString}) =
-    ImpersonatedCredentials(c.source, c.target_principal, scopes; lifetime=c.lifetime)
+with_scopes(c::ImpersonatedCredentials, scopes::AbstractVector{<:AbstractString}) =
+    ImpersonatedCredentials(c.source, c.target_principal, scopes;
+                            lifetime=c.lifetime, _iam_base_url=c._iam_base_url)
 
 function get_token(creds::ImpersonatedCredentials)
     src_token = get_token(creds.source)
 
-    url = "$_IAM_CREDENTIALS_BASE/$(creds.target_principal):generateAccessToken"
+    url = "$(creds._iam_base_url)/$(creds.target_principal):generateAccessToken"
     headers = [
         "Authorization"  => "Bearer $(src_token.access_token)",
         "Content-Type"   => "application/json",

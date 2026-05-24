@@ -19,9 +19,12 @@ All credential types (`ServiceAccountCredentials`, `UserCredentials`, `Token`,
 client secrets, refresh tokens, and access tokens are replaced with
 `<redacted>` in REPL output and log messages.
 
-**Do not** store credentials in variables named in a way that causes Julia to
-print them automatically (e.g., as the return value of the last REPL
-expression). Always assign to a variable: `creds = get_application_default()`.
+The Julia REPL prints the value of the last expression in a cell. To suppress
+display, end the line with `;` or assign to a variable before the session ends:
+
+```julia
+creds = get_application_default();   # trailing ; suppresses REPL output
+```
 
 ### SEC-002 — Error message sanitization
 
