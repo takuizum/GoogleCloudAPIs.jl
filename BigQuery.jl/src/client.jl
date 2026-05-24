@@ -33,15 +33,22 @@ function BQClient(project_id::String;
     return BQClient(project_id, resolved_creds, endpoint, is_emu, location)
 end
 
-function _request_headers(client::BQClient; content_type::Union{String, Nothing}=nothing)
+function _request_headers(; content_type::Union{String, Nothing}=nothing)
     headers = Pair{String, String}[]
-    if !client.is_emulator && client.creds !== nothing
-        push!(headers, GoogleAuth.authorization_header(client.creds))
-    end
     if content_type !== nothing
         push!(headers, "Content-Type" => content_type)
     end
     return headers
+end
+
+# Returns a sign! callback that injects a fresh Authorization header on each
+# retry attempt, ensuring tokens refreshed by CachedCredentials are used.
+function _make_signer(client::BQClient)
+    if client.is_emulator || client.creds === nothing
+        return nothing
+    end
+    creds = client.creds
+    return req -> push!(req.headers, GoogleAuth.authorization_header(creds))
 end
 
 function _bq_request(client::BQClient, method::String, path::String;
@@ -52,7 +59,8 @@ function _bq_request(client::BQClient, method::String, path::String;
     if query !== nothing && !isempty(query)
         url *= "?" * URIs.escapeuri(query)
     end
-    headers = _request_headers(client; content_type=content_type)
+    headers = _request_headers(; content_type=content_type)
     payload = body === nothing ? "" : body
-    return GoogleApiCore.do_request_with_retry(method, url, headers, payload)
+    return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
+                                               sign! = _make_signer(client))
 end

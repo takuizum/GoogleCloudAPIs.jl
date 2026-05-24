@@ -161,7 +161,7 @@ function _exchange_code(; client_id::AbstractString,
                      ["Content-Type" => "application/x-www-form-urlencoded"],
                      body; status_exception=false)
     if resp.status != 200
-        error("Token exchange failed (status $(resp.status)): $(String(resp.body))")
+        error("Token exchange failed: " * _parse_google_error_body(resp.body, resp.status))
     end
     return JSON3.read(resp.body)
 end
@@ -188,7 +188,18 @@ Creates the parent directory if necessary.
 function _save_user_credentials_to_well_known(creds::UserCredentials)
     path = get_well_known_file_path()
     isempty(path) && error("Could not determine well-known ADC path on this platform")
-    mkpath(dirname(path))
+
+    dir = dirname(path)
+    mkpath(dir)
+
+    # Warn if the parent directory is accessible to group or others.
+    if !Sys.iswindows()
+        dir_mode = stat(dir).mode & 0o777
+        if (dir_mode & 0o077) != 0
+            @warn "ADC directory is group/world-accessible" path=dir mode=string(dir_mode, base=8)
+        end
+    end
+
     payload = Dict(
         "type"          => "authorized_user",
         "client_id"     => creds.client_id,
@@ -198,6 +209,10 @@ function _save_user_credentials_to_well_known(creds::UserCredentials)
     open(path, "w") do io
         JSON3.write(io, payload)
     end
+
+    # Restrict to owner read/write only (mirrors gcloud's own behaviour).
+    Sys.iswindows() || chmod(path, 0o600)
+
     return path
 end
 
@@ -227,7 +242,7 @@ Run the Installed-App OAuth 2.0 flow with PKCE:
   Any process or user that can read that file gains access to your Google Cloud
   resources. Leave this `false` (the default) to keep credentials in memory only,
   valid for the current Julia session.
-- `timeout::Real=120`         — Seconds to wait for the callback
+- `timeout::Real=60`          — Seconds to wait for the callback
 - `bind_host::String="127.0.0.1"` — Loopback interface to bind (do NOT use `0.0.0.0`)
 - `token_endpoint::String`    — Override for testing
 - `auth_endpoint::String`     — Override for testing
@@ -241,7 +256,7 @@ function authorize_via_browser(; client_id::AbstractString,
                                 port::Int=0,
                                 open_browser::Bool=true,
                                 save_adc::Bool=false,
-                                timeout::Real=120,
+                                timeout::Real=60,
                                 bind_host::AbstractString="127.0.0.1",
                                 token_endpoint::AbstractString=_TOKEN_ENDPOINT,
                                 state::Union{AbstractString, Nothing}=nothing,

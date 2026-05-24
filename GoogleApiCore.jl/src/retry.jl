@@ -65,11 +65,11 @@ function do_request_with_retry(method::String, url::String, headers=[], body="";
 
         if attempt >= config.max_attempts || !should_retry(method, resp.status)
             if resp.status == 401 || resp.status == 403
-                throw(AuthError("$(resp.status): $(String(resp.body))"))
+                throw(AuthError(_parse_api_error_body(resp.body, resp.status)))
             elseif resp.status == 404
                 throw(NotFoundError(url))
             elseif resp.status >= 400
-                throw(GoogleAPIError(resp.status, String(resp.body)))
+                throw(GoogleAPIError(resp.status, _parse_api_error_body(resp.body, resp.status)))
             end
             return resp
         end
