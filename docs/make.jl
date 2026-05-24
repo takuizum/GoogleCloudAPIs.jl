@@ -29,6 +29,7 @@ makedocs(
         "Cloud Storage"  => "storage.md",
         "BigQuery"       => "bigquery.md",
         "Cloud Pub/Sub"  => "pubsub.md",
+        "Contributing"   => "contributing.md",
     ],
 )
 

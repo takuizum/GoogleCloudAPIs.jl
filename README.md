@@ -2,64 +2,80 @@
 
 [![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml)
 [![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://takuizum.github.io/GoogleCloudAPIs.jl/stable)
-[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://takuizum.github.io/GoogleCloudAPIs.jl/dev)
-[![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Modern Julia client libraries for Google Cloud Platform, organized as a monorepo of focused sub-packages.
+Julia client libraries for Google Cloud Platform.
 
 ## Packages
 
 | Package | Purpose |
 |---------|---------|
-| [GoogleAuth.jl](GoogleAuth.jl) | Authentication: ADC, service accounts, OAuth 2.0 PKCE browser flow |
-| [GoogleApiCore.jl](GoogleApiCore.jl) | Shared infrastructure: retry, pagination, long-running operations |
-| [BigQuery.jl](BigQuery.jl) | BigQuery REST API client (jobs, datasets, tables) |
-| [GoogleCloudStorage.jl](GoogleCloudStorage.jl) | Cloud Storage JSON API client (buckets, objects) |
-| [GoogleCloudPubSub.jl](GoogleCloudPubSub.jl) | Pub/Sub client (topics, subscriptions, publish/pull) |
+| [GoogleAuth.jl](GoogleAuth.jl) | Authentication — ADC, service account, OAuth 2.0 |
+| [BigQuery.jl](BigQuery.jl) | BigQuery — query, datasets, tables |
+| [GoogleCloudStorage.jl](GoogleCloudStorage.jl) | Cloud Storage — buckets and objects |
+| [GoogleCloudPubSub.jl](GoogleCloudPubSub.jl) | Pub/Sub — topics, subscriptions, publish/pull |
 
-## Design
+Each package can be installed independently. `GoogleApiCore` is a shared dependency pulled in automatically.
 
-- **Composable** — each sub-package can be added independently. No "umbrella" import.
-- **Cred-agnostic** — every client accepts a `creds::GoogleAuth.Credentials` argument and falls back to Application Default Credentials.
-- **Emulator-friendly** — `*_EMULATOR_HOST` env vars switch endpoints automatically (`BIGQUERY_EMULATOR_HOST`, `STORAGE_EMULATOR_HOST`, `PUBSUB_EMULATOR_HOST`).
-- **Auto-refresh tokens** — `CachedCredentials` wraps any inner credential type and refreshes 5 min before expiry.
-
-## Quick start
+## Installation
 
 ```julia
-import Pkg
-Pkg.develop(path="./GoogleAuth.jl")
-Pkg.develop(path="./BigQuery.jl")
-
-using BigQuery
-client = BQClient("your-project-id")             # uses ADC by default
-rows = query(client, "SELECT 1 AS n")
+using Pkg
+Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="BigQuery.jl")
+Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="GoogleCloudStorage.jl")
+Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="GoogleCloudPubSub.jl")
 ```
 
 ## Authentication
 
-```julia
-using GoogleAuth
+All clients use [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) by default.
 
-# Option A: Application Default Credentials (gcloud auth application-default login)
-creds = get_application_default()
-
-# Option B: Browser-based OAuth (installed-app PKCE)
-creds = authorize_via_browser(;
-    client_id     = "...",
-    client_secret = "...",
-    scopes        = ["https://www.googleapis.com/auth/cloud-platform"],
-)
+```bash
+gcloud auth application-default login
 ```
 
-## Status
+Service account key files and browser-based OAuth are also supported — see [Authentication docs](https://takuizum.github.io/GoogleCloudAPIs.jl/stable/auth).
 
-v0.1 — REST APIs only. Future work:
+## Quick start
 
-- BigQuery Storage Read API (gRPC) for zero-copy Arrow streaming
-- GCS resumable uploads & V4 signed URLs
-- PubSub streaming pull / publisher batching
+**BigQuery**
+
+```julia
+using BigQuery
+
+bq   = BQClient("my-project")
+rows = query(bq, "SELECT 1 AS n, 'hello' AS s")
+rows[1].n  # 1
+rows[1].s  # "hello"
+```
+
+**Cloud Storage**
+
+```julia
+using GoogleCloudStorage
+
+gcs = Client("my-project")
+upload_object(gcs, "my-bucket", "hello.txt", "Hello, World!")
+bytes = download_object(gcs, "my-bucket", "hello.txt")
+String(bytes)  # "Hello, World!"
+```
+
+**Pub/Sub**
+
+```julia
+using GoogleCloudPubSub
+
+ps  = PubSubClient(project="my-project")
+publish(ps, "my-topic", "hello")
+msgs = pull(ps, "my-sub"; max_messages=10)
+String(msgs[1].data)  # "hello"
+```
+
+For full API reference, see the [documentation](https://takuizum.github.io/GoogleCloudAPIs.jl/stable).
+
+## Note on AI-assisted development
+
+This library was developed with significant assistance from Claude (Anthropic). See [Contributing](https://takuizum.github.io/GoogleCloudAPIs.jl/stable/contributing) for details.
 
 ## License
 
