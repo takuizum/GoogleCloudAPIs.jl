@@ -19,7 +19,7 @@ Create a topic in the configured project.
 function create_topic(client::PubSubClient, topic_id::AbstractString)
     resp = _request(client, "PUT", _topic_path(client, topic_id);
                     body="{}", content_type="application/json")
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     return Topic(String(get(doc, "name", "projects/$(client.project)/topics/$(topic_id)")))
 end
 
@@ -28,7 +28,7 @@ end
 """
 function get_topic(client::PubSubClient, topic_id::AbstractString)
     resp = _request(client, "GET", _topic_path(client, topic_id))
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     return Topic(String(doc["name"]))
 end
 
@@ -54,7 +54,7 @@ function _fetch_topic_page(client::PubSubClient, page_token::Union{Nothing, Abst
         q["pageToken"] = page_token
     end
     resp = _request(client, "GET", "v1/projects/$(client.project)/topics"; query=q)
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "topics", nothing)
     items = raw === nothing ? Topic[] : [Topic(String(t["name"])) for t in raw]
     token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing

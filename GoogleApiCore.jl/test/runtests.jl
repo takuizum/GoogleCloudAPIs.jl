@@ -102,7 +102,7 @@ get_next_token(::SzPage) = nothing
             cfg  = RetryConfig(initial_delay=0.0, max_attempts=3)
             resp = do_request_with_retry("GET", url, [], ""; config=cfg)
             @test resp.status == 200
-            @test JSON.parse(String(resp.body))["ok"] == true
+            @test JSON.parse(IOBuffer(resp.body))["ok"] == true
         end
     end
 

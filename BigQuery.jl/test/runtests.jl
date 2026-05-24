@@ -233,7 +233,7 @@ end
             client = BQClient("p", nothing, "http://127.0.0.1:$port", true, "US")
             ds = create_dataset(client, "new-ds")
             @test ds.dataset_id == "new-ds"
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["datasetReference"]["datasetId"]) == "new-ds"
             @test String(doc["location"]) == "US"
         finally
@@ -287,7 +287,7 @@ end
             @test length(tbl.schema) == 2
             @test tbl.schema[1].name == "id"
             @test tbl.schema[1].mode == "REQUIRED"
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["tableReference"]["tableId"]) == "t1"
             @test length(doc["schema"]["fields"]) == 2
         finally

@@ -157,7 +157,7 @@ function get_token(creds::UserCredentials)
 
     resp = HTTP.post(url, headers, body; status_exception=false)
     if resp.status == 200
-        return Token(JSON.parse(String(resp.body)))
+        return Token(JSON.parse(IOBuffer(resp.body)))
     else
         error("Failed to refresh user token: " *
               _parse_google_error_body(resp.body, resp.status))
@@ -195,7 +195,7 @@ function get_token(creds::ServiceAccountCredentials)
 
     resp = HTTP.post(creds.token_uri, headers, body; status_exception=false)
     if resp.status == 200
-        return Token(JSON.parse(String(resp.body)))
+        return Token(JSON.parse(IOBuffer(resp.body)))
     else
         error("Failed to fetch token for service account ($(creds.client_email)): " *
               _parse_google_error_body(resp.body, resp.status))
@@ -281,7 +281,7 @@ function get_token(creds::ImpersonatedCredentials)
               _parse_google_error_body(resp.body, resp.status))
     end
 
-    j = JSON.parse(String(resp.body))
+    j = JSON.parse(IOBuffer(resp.body))
 
     # expireTime is an RFC3339 timestamp; convert to seconds-remaining for Token.
     expire_str = replace(String(j["expireTime"]), r"(\.\d+)?Z$" => "")

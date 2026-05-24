@@ -224,7 +224,7 @@ end
             @test b.storage_class == "STANDARD"
             @test received_method[] == "POST"
             @test occursin("project=my-proj", received_query[])
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["name"])         == "new-bkt"
             @test String(doc["location"])     == "ASIA"
             @test String(doc["storageClass"]) == "STANDARD"

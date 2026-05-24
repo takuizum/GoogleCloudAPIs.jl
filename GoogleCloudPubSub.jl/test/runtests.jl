@@ -51,7 +51,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             mid = publish(client, "topic-a", "hello, world!")
             @test mid == "mid-1"
             @test occursin("/v1/projects/p/topics/topic-a:publish", received_path[])
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test length(doc["messages"]) == 1
             data_b64 = String(doc["messages"][1]["data"])
             @test String(Base64.base64decode(data_b64)) == "hello, world!"
@@ -77,7 +77,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             ]
             ids = publish(client, "topic-a", msgs)
             @test ids == ["m1", "m2"]
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test length(doc["messages"]) == 2
             @test String(doc["messages"][1]["attributes"]["k"]) == "1"
             @test String(Base64.base64decode(String(doc["messages"][2]["data"]))) == "second"
@@ -107,7 +107,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
                 return HTTP.Response(200, ["Content-Type" => "application/json"], body_pull)
             elseif endswith(req.target, ":acknowledge")
                 # Verify ack_ids
-                doc = JSON.parse(String(req.body))
+                doc = JSON.parse(IOBuffer(req.body))
                 @assert "ACK-1" in [String(x) for x in doc["ackIds"]]
                 return HTTP.Response(200, "{}")
             end
@@ -161,7 +161,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             sub = create_subscription(client, "sub-x", "topic-x"; ack_deadline_seconds=30)
             @test sub.name  == "projects/p/subscriptions/sub-x"
             @test sub.topic == "projects/p/topics/topic-x"
-            doc = JSON.parse(String(received_body[]))
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["topic"]) == "projects/p/topics/topic-x"
             @test Int(doc["ackDeadlineSeconds"]) == 30
         finally

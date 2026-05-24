@@ -27,7 +27,7 @@ function create_subscription(client::PubSubClient, sub_id::AbstractString,
     ))
     resp = _request(client, "PUT", _subscription_path(client, sub_id);
                     body=body, content_type="application/json")
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     return Subscription(
         String(get(doc, "name", "projects/$(client.project)/subscriptions/$(sub_id)")),
         String(get(doc, "topic", "projects/$(client.project)/topics/$(topic_id)")),
@@ -39,7 +39,7 @@ end
 """
 function get_subscription(client::PubSubClient, sub_id::AbstractString)
     resp = _request(client, "GET", _subscription_path(client, sub_id))
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     return Subscription(String(doc["name"]), String(doc["topic"]))
 end
 
@@ -66,7 +66,7 @@ function _fetch_subscription_page(client::PubSubClient,
         q["pageToken"] = page_token
     end
     resp = _request(client, "GET", "v1/projects/$(client.project)/subscriptions"; query=q)
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "subscriptions", nothing)
     items = if raw === nothing
         Subscription[]
@@ -98,7 +98,7 @@ function pull(client::PubSubClient, sub_id::AbstractString;
     ))
     path = _subscription_path(client, sub_id) * ":pull"
     resp = _request(client, "POST", path; body=body, content_type="application/json")
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "receivedMessages", nothing)
     raw === nothing && return PubSubMessage[]
     return [_parse_pull_message(r) for r in raw]

@@ -163,7 +163,7 @@ function _exchange_code(; client_id::AbstractString,
     if resp.status != 200
         error("Token exchange failed: " * _parse_google_error_body(resp.body, resp.status))
     end
-    return JSON.parse(String(resp.body))
+    return JSON.parse(IOBuffer(resp.body))
 end
 
 """

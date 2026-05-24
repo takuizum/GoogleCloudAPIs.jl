@@ -789,7 +789,7 @@ sequenceDiagram
     end
 
     REQ-->>BQ: HTTP.Response
-    BQ->>BQ: JSON.parse(resp.body)<br/>schema 解析<br/>nextPageToken 追跡<br/>_row_to_namedtuple
+    BQ->>BQ: JSON.parse(IOBuffer(resp.body))<br/>schema 解析<br/>nextPageToken 追跡<br/>_row_to_namedtuple
     BQ-->>U: Vector{NamedTuple}
 ```
 

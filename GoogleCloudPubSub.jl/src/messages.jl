@@ -43,7 +43,7 @@ function publish(client::PubSubClient, topic_id::AbstractString,
     body = JSON.json(Dict("messages" => [_message_to_json(m) for m in messages]))
     path = _topic_path(client, topic_id) * ":publish"
     resp = _request(client, "POST", path; body=body, content_type="application/json")
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     ids = get(doc, "messageIds", nothing)
     return ids === nothing ? String[] : [String(x) for x in ids]
 end

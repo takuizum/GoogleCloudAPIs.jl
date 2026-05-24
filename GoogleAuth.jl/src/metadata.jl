@@ -24,7 +24,7 @@ function get_token(creds::ComputeCredentials)
     resp = HTTP.get(url, headers=METADATA_FLAVOR_HEADER)
     
     if resp.status == 200
-        return Token(JSON.parse(String(resp.body)))
+        return Token(JSON.parse(IOBuffer(resp.body)))
     else
         error("Failed to fetch token from metadata server. Status: $(resp.status)")
     end

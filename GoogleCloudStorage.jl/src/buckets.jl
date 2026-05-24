@@ -33,7 +33,7 @@ function _fetch_bucket_page(client::Client, page_token::Union{Nothing, AbstractS
         q["pageToken"] = page_token
     end
     resp = _request(client, "GET", "storage/v1/b"; query=q)
-    doc = JSON.parse(String(resp.body))
+    doc = JSON.parse(IOBuffer(resp.body))
     raw_items = get(doc, "items", nothing)
     items = raw_items === nothing ? Bucket[] : [_parse_bucket(b) for b in raw_items]
     next_token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing
@@ -53,7 +53,7 @@ list_buckets(client::Client) =
 """
 function get_bucket(client::Client, name::AbstractString)
     resp = _request(client, "GET", "storage/v1/b/$(URIs.escapeuri(name))")
-    return _parse_bucket(JSON.parse(String(resp.body)))
+    return _parse_bucket(JSON.parse(IOBuffer(resp.body)))
 end
 
 """
@@ -72,7 +72,7 @@ function create_bucket(client::Client, name::AbstractString;
     resp = _request(client, "POST", "storage/v1/b";
                     query=Dict("project" => client.project_id),
                     body=body, content_type="application/json")
-    return _parse_bucket(JSON.parse(String(resp.body)))
+    return _parse_bucket(JSON.parse(IOBuffer(resp.body)))
 end
 
 """
