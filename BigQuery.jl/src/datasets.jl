@@ -35,7 +35,7 @@ function _fetch_dataset_page(client::BQClient, page_token::Union{Nothing, Abstra
     end
     path = "bigquery/v2/projects/$(client.project_id)/datasets"
     resp = _bq_request(client, "GET", path; query=q)
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(String(resp.body))
     raw = get(doc, "datasets", nothing)
     items = raw === nothing ? Dataset[] : [_parse_dataset(d) for d in raw]
     token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing
@@ -56,7 +56,7 @@ list_datasets(client::BQClient) =
 function get_dataset(client::BQClient, dataset_id::AbstractString)
     path = "bigquery/v2/projects/$(client.project_id)/datasets/$(dataset_id)"
     resp = _bq_request(client, "GET", path)
-    return _parse_dataset(JSON3.read(resp.body))
+    return _parse_dataset(JSON.parse(String(resp.body)))
 end
 
 """
@@ -75,10 +75,10 @@ function create_dataset(client::BQClient, dataset_id::AbstractString;
     if friendly_name !== nothing
         payload["friendlyName"] = String(friendly_name)
     end
-    body = JSON3.write(payload)
+    body = JSON.json(payload)
     path = "bigquery/v2/projects/$(client.project_id)/datasets"
     resp = _bq_request(client, "POST", path; body=body, content_type="application/json")
-    return _parse_dataset(JSON3.read(resp.body))
+    return _parse_dataset(JSON.parse(String(resp.body)))
 end
 
 """

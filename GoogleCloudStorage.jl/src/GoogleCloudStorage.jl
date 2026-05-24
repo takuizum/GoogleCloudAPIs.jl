@@ -1,8 +1,7 @@
 module GoogleCloudStorage
 
 using HTTP
-using JSON3
-using StructTypes
+using JSON
 using URIs
 
 import GoogleAuth

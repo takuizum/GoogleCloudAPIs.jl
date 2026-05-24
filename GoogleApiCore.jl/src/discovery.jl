@@ -2,8 +2,7 @@
 module Discovery
 
 using HTTP
-using JSON3
-using StructTypes
+using JSON
 
 export generate_api
 
@@ -14,7 +13,7 @@ function fetch_discovery_doc(api_name::String, version::String)
     url = "https://www.googleapis.com/discovery/v1/apis/$api_name/$version/rest"
     resp = HTTP.get(url)
     if resp.status == 200
-        return JSON3.read(resp.body)
+        return JSON.parse(String(resp.body))
     else
         error("Failed to fetch discovery doc for $api_name $version")
     end
@@ -26,11 +25,11 @@ This uses metaprogramming concepts to dynamically create function definitions.
 
 For the prototype, it dynamically generates simple HTTP wrapper functions.
 """
-function generate_method(service_name::String, resource_name::String, method_name::String, method_def::JSON3.Object)
+function generate_method(service_name::String, resource_name::String, method_name::String, method_def::AbstractDict)
     # The HTTP method (GET, POST, etc)
-    http_method = get(method_def, :httpMethod, "GET")
+    http_method = get(method_def, "httpMethod", "GET")
     # The relative path
-    path = get(method_def, :path, "")
+    path = get(method_def, "path", "")
     
     # Generate a Julia function name, e.g., storage_buckets_get
     func_name = Symbol(join([service_name, resource_name, method_name], "_"))
@@ -68,14 +67,14 @@ Reads a discovery document and evaluates generated methods into the target modul
 function generate_api(target_module::Module, api_name::String, version::String)
     doc = fetch_discovery_doc(api_name, version)
     
-    if !haskey(doc, :resources)
+    if !haskey(doc, "resources")
         @warn "No resources found in discovery doc."
         return
     end
     
-    for (res_name, resource) in doc.resources
-        if haskey(resource, :methods)
-            for (meth_name, method_def) in resource.methods
+    for (res_name, resource) in doc["resources"]
+        if haskey(resource, "methods")
+            for (meth_name, method_def) in resource["methods"]
                 # Generate the expression
                 expr = generate_method(api_name, string(res_name), string(meth_name), method_def)
                 

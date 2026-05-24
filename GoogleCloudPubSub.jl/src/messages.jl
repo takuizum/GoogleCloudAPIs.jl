@@ -40,10 +40,10 @@ The single-message variants return a single message ID as `String`.
 function publish(client::PubSubClient, topic_id::AbstractString,
                  messages::Vector{PubSubMessage})
     isempty(messages) && return String[]
-    body = JSON3.write(Dict("messages" => [_message_to_json(m) for m in messages]))
+    body = JSON.json(Dict("messages" => [_message_to_json(m) for m in messages]))
     path = _topic_path(client, topic_id) * ":publish"
     resp = _request(client, "POST", path; body=body, content_type="application/json")
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(String(resp.body))
     ids = get(doc, "messageIds", nothing)
     return ids === nothing ? String[] : [String(x) for x in ids]
 end

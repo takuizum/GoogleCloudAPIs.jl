@@ -42,7 +42,7 @@ function _fetch_object_page(client::Client, bucket::AbstractString,
         q["prefix"] = prefix
     end
     resp = _request(client, "GET", "storage/v1/b/$(URIs.escapeuri(bucket))/o"; query=q)
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(String(resp.body))
     raw = get(doc, "items", nothing)
     items = raw === nothing ? Object[] : [_parse_object(o) for o in raw]
     token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing
@@ -63,7 +63,7 @@ Fetch object metadata (does not download the object body).
 function get_object(client::Client, bucket::AbstractString, name::AbstractString)
     path = "storage/v1/b/$(URIs.escapeuri(bucket))/o/$(URIs.escapeuri(name))"
     resp = _request(client, "GET", path)
-    return _parse_object(JSON3.read(resp.body))
+    return _parse_object(JSON.parse(String(resp.body)))
 end
 
 """
@@ -101,7 +101,7 @@ function upload_object(client::Client, bucket::AbstractString, name::AbstractStr
     path = "upload/storage/v1/b/$(URIs.escapeuri(bucket))/o"
     q = Dict{String, Any}("uploadType" => "media", "name" => name)
     resp = _request(client, "POST", path; query=q, body=body, content_type=content_type)
-    return _parse_object(JSON3.read(resp.body))
+    return _parse_object(JSON.parse(String(resp.body)))
 end
 
 """

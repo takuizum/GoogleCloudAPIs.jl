@@ -1,8 +1,7 @@
 module GoogleApiCore
 
 using HTTP
-using JSON3
-using StructTypes
+using JSON
 
 export RetryConfig, do_request_with_retry
 export PagedIterator, AbstractPage, get_items, get_next_token

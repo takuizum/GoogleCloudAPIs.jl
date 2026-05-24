@@ -163,7 +163,7 @@ function _exchange_code(; client_id::AbstractString,
     if resp.status != 200
         error("Token exchange failed: " * _parse_google_error_body(resp.body, resp.status))
     end
-    return JSON3.read(resp.body)
+    return JSON.parse(String(resp.body))
 end
 
 """
@@ -207,7 +207,7 @@ function _save_user_credentials_to_well_known(creds::UserCredentials)
         "refresh_token" => creds.refresh_token,
     )
     open(path, "w") do io
-        JSON3.write(io, payload)
+        JSON.print(io, payload)
     end
 
     # Restrict to owner read/write only (mirrors gcloud's own behaviour).
@@ -295,7 +295,7 @@ function authorize_via_browser(; client_id::AbstractString,
         token_endpoint=token_endpoint,
     )
 
-    refresh_token = String(get(resp, :refresh_token, ""))
+    refresh_token = String(get(resp, "refresh_token", ""))
     isempty(refresh_token) && error(
         "Token endpoint did not return a refresh_token. " *
         "Ensure access_type=offline and prompt=consent were honoured."
