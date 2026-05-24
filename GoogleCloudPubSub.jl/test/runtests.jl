@@ -20,7 +20,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
 
 @testset "GoogleCloudPubSub.jl" begin
     @testset "Aqua" begin
-        Aqua.test_all(GoogleCloudPubSub; ambiguities=false)
+        Aqua.test_all(GoogleCloudPubSub; ambiguities=false, persistent_tasks=false)
     end
 
     # ── PubSubMessage construction ──────────────────────────

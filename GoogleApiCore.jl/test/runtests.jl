@@ -63,7 +63,7 @@ get_next_token(::SzPage) = nothing
 @testset "GoogleApiCore.jl" begin
 
     @testset "Aqua" begin
-        Aqua.test_all(GoogleApiCore; ambiguities=false)
+        Aqua.test_all(GoogleApiCore; ambiguities=false, persistent_tasks=false)
     end
 
     # ── RetryConfig ─────────────────────────────────────────

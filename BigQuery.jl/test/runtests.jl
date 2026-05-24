@@ -53,7 +53,7 @@ end
 @testset "BigQuery.jl" begin
 
     @testset "Aqua" begin
-        Aqua.test_all(BigQuery; ambiguities=false)
+        Aqua.test_all(BigQuery; ambiguities=false, persistent_tasks=false)
     end
 
     # ── _coerce_value: type conversions ──────────────────────

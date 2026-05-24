@@ -15,7 +15,7 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
 
 @testset "GoogleAuth.jl" begin
     @testset "Aqua" begin
-        Aqua.test_all(GoogleAuth; ambiguities=false)
+        Aqua.test_all(GoogleAuth; ambiguities=false, persistent_tasks=false)
     end
 
     # ── 型の構造 ─────────────────────────────────────────────

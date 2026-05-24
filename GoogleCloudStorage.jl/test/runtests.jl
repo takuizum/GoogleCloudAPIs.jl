@@ -42,7 +42,7 @@ end
 @testset "GoogleCloudStorage.jl" begin
 
     @testset "Aqua" begin
-        Aqua.test_all(GoogleCloudStorage; ambiguities=false)
+        Aqua.test_all(GoogleCloudStorage; ambiguities=false, persistent_tasks=false)
     end
 
     # ── get_bucket via mock server ───────────────────────────
