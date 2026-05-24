@@ -43,15 +43,15 @@ jobs:
             using GoogleAuth, GoogleApiCore, GoogleCloudStorage, BigQuery, GoogleCloudPubSub
 
             @info "Testing GoogleAuth..."
-            Aqua.test_all(GoogleAuth; ambiguities=false)
+            Aqua.test_all(GoogleAuth; ambiguities=false, persistent_tasks=false)
             @info "Testing GoogleApiCore..."
-            Aqua.test_all(GoogleApiCore; ambiguities=false)
+            Aqua.test_all(GoogleApiCore; ambiguities=false, persistent_tasks=false)
             @info "Testing GoogleCloudStorage..."
-            Aqua.test_all(GoogleCloudStorage; ambiguities=false)
+            Aqua.test_all(GoogleCloudStorage; ambiguities=false, persistent_tasks=false)
             @info "Testing BigQuery..."
-            Aqua.test_all(BigQuery; ambiguities=false)
+            Aqua.test_all(BigQuery; ambiguities=false, persistent_tasks=false)
             @info "Testing GoogleCloudPubSub..."
-            Aqua.test_all(GoogleCloudPubSub; ambiguities=false)
+            Aqua.test_all(GoogleCloudPubSub; ambiguities=false, persistent_tasks=false)
           '
 
   # ──────────────────────────────────────────────
