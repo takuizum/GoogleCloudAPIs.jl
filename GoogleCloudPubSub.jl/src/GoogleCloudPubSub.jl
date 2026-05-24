@@ -51,15 +51,20 @@ end
 # Backwards-compat positional shim for the workflow example
 PubSubClient(project::AbstractString; kwargs...) = PubSubClient(; project=String(project), kwargs...)
 
-function _headers(client::PubSubClient; content_type=nothing)
+function _headers(; content_type=nothing)
     h = Pair{String, String}[]
-    if !client.is_emulator && client.creds !== nothing
-        push!(h, GoogleAuth.authorization_header(client.creds))
-    end
     if content_type !== nothing
         push!(h, "Content-Type" => content_type)
     end
     return h
+end
+
+function _make_signer(client::PubSubClient)
+    if client.is_emulator || client.creds === nothing
+        return nothing
+    end
+    creds = client.creds
+    return req -> push!(req.headers, GoogleAuth.authorization_header(creds))
 end
 
 function _request(client::PubSubClient, method::String, path::AbstractString;
@@ -68,9 +73,10 @@ function _request(client::PubSubClient, method::String, path::AbstractString;
     if query !== nothing && !isempty(query)
         url *= "?" * URIs.escapeuri(query)
     end
-    headers = _headers(client; content_type=content_type)
+    headers = _headers(; content_type=content_type)
     payload = body === nothing ? "" : body
-    return GoogleApiCore.do_request_with_retry(method, url, headers, payload)
+    return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
+                                               sign! = _make_signer(client))
 end
 
 include("topics.jl")

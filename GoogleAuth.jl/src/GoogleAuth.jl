@@ -12,8 +12,9 @@ import SHA
 import Sockets
 
 export Credentials, Token, ServiceAccountCredentials, UserCredentials, ComputeCredentials
-export CachedCredentials
+export ImpersonatedCredentials, CachedCredentials
 export get_application_default, get_token, authorization_header
+export with_scopes
 export authorize_via_browser, open_url
 
 include("credentials.jl")

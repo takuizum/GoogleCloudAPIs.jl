@@ -1,5 +1,17 @@
 # adc.jl
 
+# Private struct used only for JSON deserialization of service account key files.
+# Keeps ServiceAccountCredentials immutable (and free of StructTypes) while still
+# allowing JSON3 to parse the well-known Google credential format.
+struct _ServiceAccountJSON
+    project_id::String
+    client_email::String
+    private_key_id::String
+    private_key::String
+    token_uri::String
+end
+StructTypes.StructType(::Type{_ServiceAccountJSON}) = StructTypes.Struct()
+
 """
 Finds the default credentials file path created by `gcloud auth application-default login`.
 """
@@ -10,8 +22,7 @@ function get_well_known_file_path()
             return joinpath(appdata, "gcloud", "application_default_credentials.json")
         end
     else
-        homedir_path = homedir()
-        return joinpath(homedir_path, ".config", "gcloud", "application_default_credentials.json")
+        return joinpath(homedir(), ".config", "gcloud", "application_default_credentials.json")
     end
     return ""
 end
@@ -23,16 +34,18 @@ function load_credentials_from_file(path::String)
     if !isfile(path)
         error("Credentials file not found at: $path")
     end
-    
+
     content = read(path, String)
     json_data = JSON3.read(content)
-    
+
     if haskey(json_data, :type) && json_data.type == "service_account"
-        return JSON3.read(content, ServiceAccountCredentials)
+        raw = JSON3.read(content, _ServiceAccountJSON)
+        return ServiceAccountCredentials(raw.project_id, raw.client_email,
+                                         raw.private_key_id, raw.private_key,
+                                         raw.token_uri)
     elseif haskey(json_data, :type) && json_data.type == "authorized_user"
         return JSON3.read(content, UserCredentials)
     elseif haskey(json_data, :type) && json_data.type == "external_account"
-        # Support for Workload Identity Federation can be added here
         error("External account (Workload Identity Federation) not yet implemented.")
     else
         error("Unknown credential type in file: $path")

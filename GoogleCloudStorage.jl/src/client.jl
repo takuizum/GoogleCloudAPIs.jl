@@ -30,15 +30,20 @@ function Client(project_id::String;
     return Client(project_id, resolved, endpoint, is_emu)
 end
 
-function _headers(client::Client; content_type::Union{String, Nothing}=nothing)
+function _headers(; content_type::Union{String, Nothing}=nothing)
     h = Pair{String, String}[]
-    if !client.is_emulator && client.creds !== nothing
-        push!(h, GoogleAuth.authorization_header(client.creds))
-    end
     if content_type !== nothing
         push!(h, "Content-Type" => content_type)
     end
     return h
+end
+
+function _make_signer(client::Client)
+    if client.is_emulator || client.creds === nothing
+        return nothing
+    end
+    creds = client.creds
+    return req -> push!(req.headers, GoogleAuth.authorization_header(creds))
 end
 
 function _url(client::Client, path::AbstractString; query=nothing)
@@ -52,7 +57,8 @@ end
 function _request(client::Client, method::String, path::AbstractString;
                   query=nothing, body=nothing, content_type=nothing)
     url = _url(client, path; query=query)
-    headers = _headers(client; content_type=content_type)
+    headers = _headers(; content_type=content_type)
     payload = body === nothing ? "" : body
-    return GoogleApiCore.do_request_with_retry(method, url, headers, payload)
+    return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
+                                               sign! = _make_signer(client))
 end
