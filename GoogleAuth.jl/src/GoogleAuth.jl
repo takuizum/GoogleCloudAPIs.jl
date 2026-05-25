@@ -1,8 +1,7 @@
 module GoogleAuth
 
 using HTTP
-using JSON3
-using StructTypes
+using JSON
 using Dates
 using JSONWebTokens
 using URIs

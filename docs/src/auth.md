@@ -45,9 +45,9 @@ println(token.token_type)   # "Bearer"
 ### Service Account
 
 ```julia
-import JSON3, GoogleAuth
+import JSON, GoogleAuth
 
-sa = JSON3.read(read("key.json", String), GoogleAuth.ServiceAccountCredentials)
+sa = GoogleAuth.ServiceAccountCredentials(JSON.parse(read("key.json", String)))
 creds = GoogleAuth.CachedCredentials(sa)
 ```
 

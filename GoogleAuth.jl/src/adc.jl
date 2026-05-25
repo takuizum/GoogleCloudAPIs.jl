@@ -24,15 +24,13 @@ function load_credentials_from_file(path::String)
     end
 
     content = read(path, String)
-    json_data = JSON3.read(content)
+    json_data = JSON.parse(content)
 
-    if haskey(json_data, :type) && json_data.type == "service_account"
-        # ServiceAccountCredentials uses StructTypes.Struct() with a default for
-        # the `scopes` field, so JSON3 can deserialize key files directly.
-        return JSON3.read(content, ServiceAccountCredentials)
-    elseif haskey(json_data, :type) && json_data.type == "authorized_user"
-        return JSON3.read(content, UserCredentials)
-    elseif haskey(json_data, :type) && json_data.type == "external_account"
+    if haskey(json_data, "type") && json_data["type"] == "service_account"
+        return ServiceAccountCredentials(json_data)
+    elseif haskey(json_data, "type") && json_data["type"] == "authorized_user"
+        return UserCredentials(json_data)
+    elseif haskey(json_data, "type") && json_data["type"] == "external_account"
         error("External account (Workload Identity Federation) not yet implemented.")
     else
         error("Unknown credential type in file: $path")

@@ -1,7 +1,7 @@
 using Test
 using Aqua
 using GoogleAuth
-using JSON3
+using JSON
 using HTTP
 using URIs
 using Dates
@@ -307,9 +307,9 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
                 code_verifier="VER", redirect_uri="http://127.0.0.1/",
                 token_endpoint="http://127.0.0.1:$port/",
             )
-            @test String(resp[:access_token])  == "AT"
-            @test String(resp[:refresh_token]) == "RT"
-            @test resp[:expires_in]            == 3600
+            @test String(resp["access_token"])  == "AT"
+            @test String(resp["refresh_token"]) == "RT"
+            @test resp["expires_in"]            == 3600
             @test received[]["grant_type"]    == "authorization_code"
             @test received[]["code"]          == "CODE"
             @test received[]["client_id"]     == "cid"
@@ -407,7 +407,7 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
 
             adc_path = joinpath(tmp_home, ".config", "gcloud", "application_default_credentials.json")
             @test isfile(adc_path)
-            payload = JSON3.read(read(adc_path, String))
+            payload = JSON.parse(read(adc_path, String))
             @test String(payload["type"])          == "authorized_user"
             @test String(payload["refresh_token"]) == "PERSISTED_RT"
             @test String(payload["client_id"])     == "cid"
@@ -548,9 +548,9 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
         expire_str = Dates.format(expire_dt, "yyyy-mm-ddTHH:MM:SS") * "Z"
 
         iam_server = HTTP.serve!(iam_port) do req
-            received[]      = JSON3.read(String(req.body), Dict{String,Any})
+            received[]      = JSON.parse(IOBuffer(req.body))
             received_auth[] = something(HTTP.header(req, "Authorization"), "")
-            resp_body = JSON3.write(Dict(
+            resp_body = JSON.json(Dict(
                 "accessToken" => "IMPERSONATED_TOKEN",
                 "expireTime"  => expire_str,
             ))

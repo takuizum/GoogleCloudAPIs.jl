@@ -2,7 +2,7 @@ using Test
 using Aqua
 using GoogleApiCore
 using HTTP
-using JSON3
+using JSON
 import Sockets
 import GoogleApiCore: get_items, get_next_token  # メソッドを追加するためにimportする
 
@@ -102,7 +102,7 @@ get_next_token(::SzPage) = nothing
             cfg  = RetryConfig(initial_delay=0.0, max_attempts=3)
             resp = do_request_with_retry("GET", url, [], ""; config=cfg)
             @test resp.status == 200
-            @test JSON3.read(resp.body).ok == true
+            @test JSON.parse(IOBuffer(resp.body))["ok"] == true
         end
     end
 

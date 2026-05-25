@@ -11,16 +11,16 @@ format `{"error":"…","error_description":"…"}`.
 function _parse_google_error_body(body::Union{String, AbstractVector{UInt8}}, status::Integer)
     body_str = body isa String ? body : String(copy(body))
     try
-        j = JSON3.read(body_str)
-        if haskey(j, :error)
-            e = j.error
-            if e isa JSON3.Object
-                code = get(e, :code, status)
-                msg  = get(e, :message, "unknown error")
-                st   = string(get(e, :status, ""))
+        j = JSON.parse(body_str)
+        if haskey(j, "error")
+            e = j["error"]
+            if e isa AbstractDict
+                code = get(e, "code", status)
+                msg  = get(e, "message", "unknown error")
+                st   = string(get(e, "status", ""))
                 return isempty(st) ? "status=$code: $msg" : "status=$code ($st): $msg"
             elseif e isa AbstractString
-                desc = string(get(j, :error_description, ""))
+                desc = string(get(j, "error_description", ""))
                 return isempty(desc) ? "status=$status: $e" : "status=$status: $e — $desc"
             end
         end
@@ -38,7 +38,7 @@ struct Token
     token_type::String
 end
 
-StructTypes.StructType(::Type{Token}) = StructTypes.Struct()
+Token(d::AbstractDict) = Token(String(d["access_token"]), Int(d["expires_in"]), String(d["token_type"]))
 
 function Base.show(io::IO, t::Token)
     print(io, "Token(token_type=$(repr(t.token_type)), expires_in=$(t.expires_in), access_token=<redacted>)")
@@ -72,10 +72,17 @@ struct ServiceAccountCredentials <: Credentials
             String(private_key), String(token_uri), collect(String, scopes))
 end
 
-# Restore JSON3 deserialization compatibility: JSON3.read(json, ServiceAccountCredentials)
-# still works; the `scopes` field (absent in key files) defaults to String[].
-StructTypes.StructType(::Type{ServiceAccountCredentials}) = StructTypes.Struct()
-StructTypes.defaults(::Type{ServiceAccountCredentials}) = (scopes = String[],)
+function ServiceAccountCredentials(d::AbstractDict)
+    scopes = get(d, "scopes", String[])
+    return ServiceAccountCredentials(
+        String(d["project_id"]),
+        String(d["client_email"]),
+        String(d["private_key_id"]),
+        String(d["private_key"]),
+        String(d["token_uri"]),
+        scopes isa AbstractVector ? collect(String, scopes) : String[]
+    )
+end
 
 function Base.show(io::IO, c::ServiceAccountCredentials)
     scopes_str = isempty(c.scopes) ? "(default)" : join(c.scopes, ", ")
@@ -110,7 +117,14 @@ struct UserCredentials <: Credentials
     type::String
 end
 
-StructTypes.StructType(::Type{UserCredentials}) = StructTypes.Struct()
+function UserCredentials(d::AbstractDict)
+    return UserCredentials(
+        String(d["client_id"]),
+        String(d["client_secret"]),
+        String(d["refresh_token"]),
+        String(get(d, "type", "authorized_user"))
+    )
+end
 
 function Base.show(io::IO, ::UserCredentials)
     print(io, "UserCredentials(client_secret=<redacted>, refresh_token=<redacted>)")
@@ -143,7 +157,7 @@ function get_token(creds::UserCredentials)
 
     resp = HTTP.post(url, headers, body; status_exception=false)
     if resp.status == 200
-        return JSON3.read(resp.body, Token)
+        return Token(JSON.parse(IOBuffer(resp.body)))
     else
         error("Failed to refresh user token: " *
               _parse_google_error_body(resp.body, resp.status))
@@ -181,7 +195,7 @@ function get_token(creds::ServiceAccountCredentials)
 
     resp = HTTP.post(creds.token_uri, headers, body; status_exception=false)
     if resp.status == 200
-        return JSON3.read(resp.body, Token)
+        return Token(JSON.parse(IOBuffer(resp.body)))
     else
         error("Failed to fetch token for service account ($(creds.client_email)): " *
               _parse_google_error_body(resp.body, resp.status))
@@ -256,7 +270,7 @@ function get_token(creds::ImpersonatedCredentials)
         "Authorization"  => "Bearer $(src_token.access_token)",
         "Content-Type"   => "application/json",
     ]
-    body = JSON3.write(Dict(
+    body = JSON.json(Dict(
         "scope"    => creds.scopes,
         "lifetime" => "$(creds.lifetime)s",
     ))
@@ -267,14 +281,14 @@ function get_token(creds::ImpersonatedCredentials)
               _parse_google_error_body(resp.body, resp.status))
     end
 
-    j = JSON3.read(resp.body)
+    j = JSON.parse(IOBuffer(resp.body))
 
     # expireTime is an RFC3339 timestamp; convert to seconds-remaining for Token.
-    expire_str = replace(String(j[:expireTime]), r"(\.\d+)?Z$" => "")
+    expire_str = replace(String(j["expireTime"]), r"(\.\d+)?Z$" => "")
     expire_dt  = Dates.DateTime(expire_str, Dates.dateformat"yyyy-mm-ddTHH:MM:SS")
     expires_in = max(0, round(Int, Dates.datetime2unix(expire_dt) - time()))
 
-    return Token(String(j[:accessToken]), expires_in, "Bearer")
+    return Token(String(j["accessToken"]), expires_in, "Bearer")
 end
 
 """

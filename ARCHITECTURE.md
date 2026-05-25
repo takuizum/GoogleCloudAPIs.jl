@@ -99,7 +99,7 @@ graph TD
     CORE[GoogleApiCore.jl]
 
     HTTP[HTTP.jl]
-    JSON[JSON3.jl + StructTypes.jl]
+    JSON[JSON.jl]
     JWT[JSONWebTokens.jl]
     URIS[URIs.jl]
     ARROW[Arrow.jl]
@@ -146,7 +146,7 @@ graph TD
 
 - サービスパッケージ → `GoogleAuth` / `GoogleApiCore`（一方向、循環なし）
 - `GoogleAuth` ↔ `GoogleApiCore`: **互いに依存しない**。`GoogleApiCore.do_request_with_retry` は認証ロジックを持たず、`sign!` コールバックで認証ヘッダを注入する設計（credential-agnostic）。
-- 外部依存は全パッケージで HTTP.jl 1.x / JSON3.jl 1.x / URIs.jl に統一されている（`Project.toml` の `[compat]` で固定）。
+- 外部依存は全パッケージで HTTP.jl 1.x / JSON.jl / URIs.jl に統一されている（`Project.toml` の `[compat]` で固定）。
 
 ---
 
@@ -753,7 +753,7 @@ sequenceDiagram
     participant API as BigQuery REST
 
     U->>BQ: query(client, "SELECT 1")
-    BQ->>BQ: body = JSON3.write(<br/>{query, location, ...})
+    BQ->>BQ: body = JSON.json(<br/>{query, location, ...})
     BQ->>REQ: _bq_request("POST",<br/>"bigquery/v2/projects/.../queries",<br/>body=body)
     REQ->>SIG: build closure
     REQ->>CORE: do_request_with_retry<br/>(method, url, headers, body;<br/>sign! = closure)
@@ -789,7 +789,7 @@ sequenceDiagram
     end
 
     REQ-->>BQ: HTTP.Response
-    BQ->>BQ: JSON3.read(resp.body)<br/>schema 解析<br/>nextPageToken 追跡<br/>_row_to_namedtuple
+    BQ->>BQ: JSON.parse(IOBuffer(resp.body))<br/>schema 解析<br/>nextPageToken 追跡<br/>_row_to_namedtuple
     BQ-->>U: Vector{NamedTuple}
 ```
 

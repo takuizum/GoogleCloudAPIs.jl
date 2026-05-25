@@ -33,7 +33,7 @@ function _fetch_bucket_page(client::Client, page_token::Union{Nothing, AbstractS
         q["pageToken"] = page_token
     end
     resp = _request(client, "GET", "storage/v1/b"; query=q)
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     raw_items = get(doc, "items", nothing)
     items = raw_items === nothing ? Bucket[] : [_parse_bucket(b) for b in raw_items]
     next_token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing
@@ -53,7 +53,7 @@ list_buckets(client::Client) =
 """
 function get_bucket(client::Client, name::AbstractString)
     resp = _request(client, "GET", "storage/v1/b/$(URIs.escapeuri(name))")
-    return _parse_bucket(JSON3.read(resp.body))
+    return _parse_bucket(JSON.parse(IOBuffer(resp.body)))
 end
 
 """
@@ -64,7 +64,7 @@ Create a new GCS bucket in the client's project.
 function create_bucket(client::Client, name::AbstractString;
                        location::AbstractString="US",
                        storage_class::AbstractString="STANDARD")
-    body = JSON3.write(Dict(
+    body = JSON.json(Dict(
         "name"         => String(name),
         "location"     => String(location),
         "storageClass" => String(storage_class),
@@ -72,7 +72,7 @@ function create_bucket(client::Client, name::AbstractString;
     resp = _request(client, "POST", "storage/v1/b";
                     query=Dict("project" => client.project_id),
                     body=body, content_type="application/json")
-    return _parse_bucket(JSON3.read(resp.body))
+    return _parse_bucket(JSON.parse(IOBuffer(resp.body)))
 end
 
 """

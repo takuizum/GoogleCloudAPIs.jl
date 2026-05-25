@@ -1,7 +1,7 @@
 using Test
 using GoogleCloudStorage
 using HTTP
-using JSON3
+using JSON
 using Aqua
 import Sockets
 import GoogleAuth
@@ -23,13 +23,13 @@ get_token(::MockGCSCreds) = GoogleAuth.Token("mock-gcs-token", 3600, "Bearer")
 
 # Helper: build a GCS bucket JSON object
 function bucket_json(; name="my-bucket", location="US", storage_class="STANDARD")
-    JSON3.write(Dict("name" => name, "location" => location, "storageClass" => storage_class))
+    JSON.json(Dict("name" => name, "location" => location, "storageClass" => storage_class))
 end
 
 # Helper: build a GCS object metadata JSON
 function object_json(; bucket="my-bucket", name="file.txt",
                        size="42", content_type="text/plain", generation="1")
-    JSON3.write(Dict(
+    JSON.json(Dict(
         "bucket" => bucket,
         "name" => name,
         "size" => size,
@@ -66,7 +66,7 @@ end
     # ── list_buckets via mock server (single page) ───────────
     @testset "list_buckets single page (mock server)" begin
         port = free_port()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "kind"  => "storage#buckets",
             "items" => [
                 Dict("name" => "bucket-a", "location" => "US",   "storageClass" => "STANDARD"),
@@ -224,7 +224,7 @@ end
             @test b.storage_class == "STANDARD"
             @test received_method[] == "POST"
             @test occursin("project=my-proj", received_query[])
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["name"])         == "new-bkt"
             @test String(doc["location"])     == "ASIA"
             @test String(doc["storageClass"]) == "STANDARD"
@@ -338,7 +338,7 @@ end
             HTTP.post(
                 "$(ENV["STORAGE_EMULATOR_HOST"])/storage/v1/b?project=test-project",
                 ["Content-Type" => "application/json"],
-                JSON3.write(Dict("name" => bucket_name)),
+                JSON.json(Dict("name" => bucket_name)),
             )
 
             @testset "list_buckets contains created bucket (emulator)" begin

@@ -1,7 +1,7 @@
 using Test
 using GoogleCloudPubSub
 using HTTP
-using JSON3
+using JSON
 using Aqua
 import Base64
 import Sockets
@@ -44,14 +44,14 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             received_body[] = req.body
             received_path[] = req.target
             HTTP.Response(200, ["Content-Type" => "application/json"],
-                          JSON3.write(Dict("messageIds" => ["mid-1"])))
+                          JSON.json(Dict("messageIds" => ["mid-1"])))
         end
         try
             client = PubSubClient("p", nothing, "http://127.0.0.1:$port", true)
             mid = publish(client, "topic-a", "hello, world!")
             @test mid == "mid-1"
             @test occursin("/v1/projects/p/topics/topic-a:publish", received_path[])
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test length(doc["messages"]) == 1
             data_b64 = String(doc["messages"][1]["data"])
             @test String(Base64.base64decode(data_b64)) == "hello, world!"
@@ -67,7 +67,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
         server = HTTP.serve!(port) do req
             received_body[] = req.body
             HTTP.Response(200, ["Content-Type" => "application/json"],
-                          JSON3.write(Dict("messageIds" => ["m1", "m2"])))
+                          JSON.json(Dict("messageIds" => ["m1", "m2"])))
         end
         try
             client = PubSubClient("p", nothing, "http://127.0.0.1:$port", true)
@@ -77,7 +77,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             ]
             ids = publish(client, "topic-a", msgs)
             @test ids == ["m1", "m2"]
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test length(doc["messages"]) == 2
             @test String(doc["messages"][1]["attributes"]["k"]) == "1"
             @test String(Base64.base64decode(String(doc["messages"][2]["data"]))) == "second"
@@ -90,7 +90,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
     @testset "pull and acknowledge (mock)" begin
         port = free_port()
         recorded = Ref{Vector{String}}(String[])
-        body_pull = JSON3.write(Dict("receivedMessages" => [
+        body_pull = JSON.json(Dict("receivedMessages" => [
             Dict(
                 "ackId" => "ACK-1",
                 "message" => Dict(
@@ -107,7 +107,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
                 return HTTP.Response(200, ["Content-Type" => "application/json"], body_pull)
             elseif endswith(req.target, ":acknowledge")
                 # Verify ack_ids
-                doc = JSON3.read(req.body)
+                doc = JSON.parse(IOBuffer(req.body))
                 @assert "ACK-1" in [String(x) for x in doc["ackIds"]]
                 return HTTP.Response(200, "{}")
             end
@@ -151,7 +151,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
         received_body = Ref{Vector{UInt8}}()
         server = HTTP.serve!(port) do req
             received_body[] = req.body
-            HTTP.Response(200, ["Content-Type" => "application/json"], JSON3.write(Dict(
+            HTTP.Response(200, ["Content-Type" => "application/json"], JSON.json(Dict(
                 "name"  => "projects/p/subscriptions/sub-x",
                 "topic" => "projects/p/topics/topic-x",
             )))
@@ -161,7 +161,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             sub = create_subscription(client, "sub-x", "topic-x"; ack_deadline_seconds=30)
             @test sub.name  == "projects/p/subscriptions/sub-x"
             @test sub.topic == "projects/p/topics/topic-x"
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["topic"]) == "projects/p/topics/topic-x"
             @test Int(doc["ackDeadlineSeconds"]) == 30
         finally
@@ -188,7 +188,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
     @testset "list_subscriptions (mock)" begin
         port = free_port()
         server = HTTP.serve!(port) do _req
-            HTTP.Response(200, ["Content-Type" => "application/json"], JSON3.write(Dict(
+            HTTP.Response(200, ["Content-Type" => "application/json"], JSON.json(Dict(
                 "subscriptions" => [
                     Dict("name" => "projects/p/subscriptions/s1", "topic" => "projects/p/topics/t1"),
                     Dict("name" => "projects/p/subscriptions/s2", "topic" => "projects/p/topics/t2"),
@@ -212,7 +212,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
         server = HTTP.serve!(port) do req
             received_headers[] = req.headers
             HTTP.Response(200, ["Content-Type" => "application/json"],
-                          JSON3.write(Dict("messageIds" => ["x"])))
+                          JSON.json(Dict("messageIds" => ["x"])))
         end
         try
             client = PubSubClient("p", MockPSCreds(), "http://127.0.0.1:$port", false)

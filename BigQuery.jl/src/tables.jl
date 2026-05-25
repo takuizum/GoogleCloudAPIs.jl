@@ -89,7 +89,7 @@ function _fetch_table_page(client::BQClient, dataset_id::AbstractString,
     end
     path = "bigquery/v2/projects/$(client.project_id)/datasets/$(dataset_id)/tables"
     resp = _bq_request(client, "GET", path; query=q)
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "tables", nothing)
     items = raw === nothing ? Table[] : [_parse_table(t) for t in raw]
     token = haskey(doc, "nextPageToken") ? String(doc["nextPageToken"]) : nothing
@@ -111,7 +111,7 @@ function get_table(client::BQClient, dataset_id::AbstractString,
                    table_id::AbstractString)
     path = "bigquery/v2/projects/$(client.project_id)/datasets/$(dataset_id)/tables/$(table_id)"
     resp = _bq_request(client, "GET", path)
-    return _parse_table(JSON3.read(resp.body))
+    return _parse_table(JSON.parse(IOBuffer(resp.body)))
 end
 
 """
@@ -130,10 +130,10 @@ function create_table(client::BQClient, dataset_id::AbstractString,
         ),
         "schema" => Dict("fields" => [_field_to_dict(f) for f in schema]),
     )
-    body = JSON3.write(payload)
+    body = JSON.json(payload)
     path = "bigquery/v2/projects/$(client.project_id)/datasets/$(dataset_id)/tables"
     resp = _bq_request(client, "POST", path; body=body, content_type="application/json")
-    return _parse_table(JSON3.read(resp.body))
+    return _parse_table(JSON.parse(IOBuffer(resp.body)))
 end
 
 """

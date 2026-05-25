@@ -30,7 +30,7 @@
 * **Communication**: `HTTP.jl` (REST/JSON), `gRPCClient.jl` (gRPC), `ProtoBuf.jl` 。
 
 
-* **Serialization**: `JSON3.jl`, `StructTypes.jl`, `Arrow.jl` 。
+* **Serialization**: `JSON.jl`, `Arrow.jl` 。
 
 
 * **Auth**: `CloudBase.jl` を基盤とした認証認可プロトコルの統合 。

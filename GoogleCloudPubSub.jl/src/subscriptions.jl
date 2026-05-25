@@ -21,13 +21,13 @@ Create a pull subscription bound to `topic_id`.
 function create_subscription(client::PubSubClient, sub_id::AbstractString,
                               topic_id::AbstractString;
                               ack_deadline_seconds::Int=10)
-    body = JSON3.write(Dict(
+    body = JSON.json(Dict(
         "topic"              => "projects/$(client.project)/topics/$(topic_id)",
         "ackDeadlineSeconds" => ack_deadline_seconds,
     ))
     resp = _request(client, "PUT", _subscription_path(client, sub_id);
                     body=body, content_type="application/json")
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     return Subscription(
         String(get(doc, "name", "projects/$(client.project)/subscriptions/$(sub_id)")),
         String(get(doc, "topic", "projects/$(client.project)/topics/$(topic_id)")),
@@ -39,7 +39,7 @@ end
 """
 function get_subscription(client::PubSubClient, sub_id::AbstractString)
     resp = _request(client, "GET", _subscription_path(client, sub_id))
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     return Subscription(String(doc["name"]), String(doc["topic"]))
 end
 
@@ -66,7 +66,7 @@ function _fetch_subscription_page(client::PubSubClient,
         q["pageToken"] = page_token
     end
     resp = _request(client, "GET", "v1/projects/$(client.project)/subscriptions"; query=q)
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "subscriptions", nothing)
     items = if raw === nothing
         Subscription[]
@@ -92,13 +92,13 @@ permanently remove them from the subscription.
 """
 function pull(client::PubSubClient, sub_id::AbstractString;
               max_messages::Int=10, return_immediately::Bool=true)
-    body = JSON3.write(Dict(
+    body = JSON.json(Dict(
         "maxMessages"       => max_messages,
         "returnImmediately" => return_immediately,
     ))
     path = _subscription_path(client, sub_id) * ":pull"
     resp = _request(client, "POST", path; body=body, content_type="application/json")
-    doc = JSON3.read(resp.body)
+    doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "receivedMessages", nothing)
     raw === nothing && return PubSubMessage[]
     return [_parse_pull_message(r) for r in raw]
@@ -112,7 +112,7 @@ Acknowledge one or more messages so the server stops redelivering them.
 function acknowledge(client::PubSubClient, sub_id::AbstractString,
                      ack_ids::Vector{<:AbstractString})
     isempty(ack_ids) && return nothing
-    body = JSON3.write(Dict("ackIds" => collect(String, ack_ids)))
+    body = JSON.json(Dict("ackIds" => collect(String, ack_ids)))
     path = _subscription_path(client, sub_id) * ":acknowledge"
     _request(client, "POST", path; body=body, content_type="application/json")
     return nothing

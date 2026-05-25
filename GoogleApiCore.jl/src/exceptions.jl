@@ -10,16 +10,16 @@ leaking the raw payload. Handles the standard REST error envelope
 function _parse_api_error_body(body::Union{String, AbstractVector{UInt8}}, status::Integer)
     body_str = body isa String ? body : String(copy(body))
     try
-        j = JSON3.read(body_str)
-        if haskey(j, :error)
-            e = j.error
-            if e isa JSON3.Object
-                code = get(e, :code, status)
-                msg  = get(e, :message, "unknown error")
-                st   = string(get(e, :status, ""))
+        j = JSON.parse(body_str)
+        if haskey(j, "error")
+            e = j["error"]
+            if e isa AbstractDict
+                code = get(e, "code", status)
+                msg  = get(e, "message", "unknown error")
+                st   = string(get(e, "status", ""))
                 return isempty(st) ? "status=$code: $msg" : "status=$code ($st): $msg"
             elseif e isa AbstractString
-                desc = string(get(j, :error_description, ""))
+                desc = string(get(j, "error_description", ""))
                 return isempty(desc) ? "status=$status: $e" : "status=$status: $e — $desc"
             end
         end

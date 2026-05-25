@@ -29,11 +29,11 @@ function query(client::BQClient, sql::AbstractString;
     if max_results !== nothing
         body["maxResults"] = max_results
     end
-    encoded = JSON3.write(body)
+    encoded = JSON.json(body)
 
     path = "bigquery/v2/projects/$(client.project_id)/queries"
     resp = _bq_request(client, "POST", path; body=encoded, content_type="application/json")
-    initial = JSON3.read(resp.body)
+    initial = JSON.parse(IOBuffer(resp.body))
 
     job_ref = initial["jobReference"]
     job_id = String(job_ref["jobId"])
@@ -59,7 +59,7 @@ function _get_results_page(client::BQClient, job_id::AbstractString,
     end
     path = "bigquery/v2/projects/$(client.project_id)/queries/$(job_id)"
     resp = _bq_request(client, "GET", path; query=q)
-    return JSON3.read(resp.body)
+    return JSON.parse(IOBuffer(resp.body))
 end
 
 

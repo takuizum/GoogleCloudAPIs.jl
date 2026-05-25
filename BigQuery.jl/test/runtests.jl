@@ -3,7 +3,7 @@ using BigQuery
 using Arrow
 using Base64
 using HTTP
-using JSON3
+using JSON
 using Aqua
 import Sockets
 import GoogleAuth
@@ -26,7 +26,7 @@ get_token(::MockBQCreds) = GoogleAuth.Token("mock-bq-token", 3600, "Bearer")
 # Build a BQ jobs.query response with JSON rows for integer column x.
 function bq_integer_response(; x_values=Int64[1, 2, 3])
     row_list = [Dict("f" => [Dict("v" => string(v))]) for v in x_values]
-    JSON3.write(Dict(
+    JSON.json(Dict(
         "jobComplete" => true,
         "jobReference" => Dict("projectId" => "proj", "jobId" => "job-mock"),
         "schema" => Dict("fields" => [Dict("name" => "x", "type" => "INTEGER")]),
@@ -41,7 +41,7 @@ function bq_json_response(; rows=[[1, "a"], [2, "b"]],
                             fields=[("n", "INTEGER"), ("s", "STRING")])
     field_defs = [Dict("name" => nm, "type" => tp) for (nm, tp) in fields]
     row_list   = [Dict("f" => [Dict("v" => string(v)) for v in row]) for row in rows]
-    JSON3.write(Dict(
+    JSON.json(Dict(
         "jobComplete" => true,
         "jobReference" => Dict("projectId" => "proj", "jobId" => "job-mock"),
         "schema" => Dict("fields" => field_defs),
@@ -141,7 +141,7 @@ end
     # ── Paginated JSON result: mock returns two pages ─────────
     @testset "query format=:json multi-page (mock server)" begin
         port = free_port()
-        page1 = JSON3.write(Dict(
+        page1 = JSON.json(Dict(
             "jobComplete" => true,
             "jobReference" => Dict("projectId" => "proj", "jobId" => "job1"),
             "schema" => Dict("fields" => [Dict("name" => "n", "type" => "INTEGER")]),
@@ -149,7 +149,7 @@ end
                          Dict("f" => [Dict("v" => "2")])],
             "pageToken" => "tok2",
         ))
-        page2 = JSON3.write(Dict(
+        page2 = JSON.json(Dict(
             "jobComplete" => true,
             "jobReference" => Dict("projectId" => "proj", "jobId" => "job1"),
             "schema" => Dict("fields" => [Dict("name" => "n", "type" => "INTEGER")]),
@@ -174,7 +174,7 @@ end
     # ── Dataset CRUD (mock server) ───────────────────────────
     @testset "list_datasets (mock)" begin
         port = free_port()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "datasets" => [
                 Dict("datasetReference" => Dict("projectId" => "p", "datasetId" => "d1"),
                      "location" => "US"),
@@ -199,7 +199,7 @@ end
 
     @testset "get_dataset (mock)" begin
         port = free_port()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "datasetReference" => Dict("projectId" => "p", "datasetId" => "ds1"),
             "location" => "asia-northeast1",
             "friendlyName" => "My Dataset",
@@ -221,7 +221,7 @@ end
     @testset "create_dataset (mock)" begin
         port = free_port()
         received_body = Ref{Vector{UInt8}}()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "datasetReference" => Dict("projectId" => "p", "datasetId" => "new-ds"),
             "location" => "US",
         ))
@@ -233,7 +233,7 @@ end
             client = BQClient("p", nothing, "http://127.0.0.1:$port", true, "US")
             ds = create_dataset(client, "new-ds")
             @test ds.dataset_id == "new-ds"
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["datasetReference"]["datasetId"]) == "new-ds"
             @test String(doc["location"]) == "US"
         finally
@@ -264,7 +264,7 @@ end
     @testset "create_table + get_table (mock)" begin
         port = free_port()
         received_body = Ref{Vector{UInt8}}()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "tableReference" => Dict("projectId" => "p", "datasetId" => "d",
                                      "tableId" => "t1"),
             "schema" => Dict("fields" => [
@@ -287,7 +287,7 @@ end
             @test length(tbl.schema) == 2
             @test tbl.schema[1].name == "id"
             @test tbl.schema[1].mode == "REQUIRED"
-            doc = JSON3.read(received_body[])
+            doc = JSON.parse(IOBuffer(received_body[]))
             @test String(doc["tableReference"]["tableId"]) == "t1"
             @test length(doc["schema"]["fields"]) == 2
         finally
@@ -297,7 +297,7 @@ end
 
     @testset "list_tables (mock)" begin
         port = free_port()
-        body = JSON3.write(Dict(
+        body = JSON.json(Dict(
             "tables" => [
                 Dict("tableReference" => Dict("projectId" => "p", "datasetId" => "d",
                                               "tableId" => "t1"), "numRows" => "100"),
