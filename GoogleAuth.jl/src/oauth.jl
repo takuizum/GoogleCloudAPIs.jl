@@ -3,9 +3,9 @@
 # Installed-App OAuth 2.0 flow with PKCE for desktop / CLI clients.
 # Replicates the behavior of Python's `google_auth_oauthlib.flow.InstalledAppFlow`.
 
-const _AUTH_ENDPOINT  = "https://accounts.google.com/o/oauth2/v2/auth"
+const _AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 const _TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-const _DEFAULT_SCOPE  = "https://www.googleapis.com/auth/cloud-platform"
+const _DEFAULT_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
 # Characters allowed for PKCE code_verifier per RFC 7636 §4.1
 const _PKCE_ALPHABET = collect(Char['A':'Z'; 'a':'z'; '0':'9'; '-'; '.'; '_'; '~'])
@@ -49,22 +49,22 @@ end
                       access_type="offline", prompt="consent") -> String
 """
 function _build_auth_url(; client_id::AbstractString,
-                          redirect_uri::AbstractString,
-                          scopes::Vector{<:AbstractString},
-                          state::AbstractString,
-                          code_challenge::AbstractString,
-                          access_type::AbstractString="offline",
-                          prompt::AbstractString="consent")
+    redirect_uri::AbstractString,
+    scopes::Vector{<:AbstractString},
+    state::AbstractString,
+    code_challenge::AbstractString,
+    access_type::AbstractString="offline",
+    prompt::AbstractString="consent")
     params = Dict{String,String}(
-        "response_type"         => "code",
-        "client_id"             => String(client_id),
-        "redirect_uri"          => String(redirect_uri),
-        "scope"                 => join(scopes, " "),
-        "state"                 => String(state),
-        "code_challenge"        => String(code_challenge),
+        "response_type" => "code",
+        "client_id" => String(client_id),
+        "redirect_uri" => String(redirect_uri),
+        "scope" => join(scopes, " "),
+        "state" => String(state),
+        "code_challenge" => String(code_challenge),
         "code_challenge_method" => "S256",
-        "access_type"           => String(access_type),
-        "prompt"                => String(prompt),
+        "access_type" => String(access_type),
+        "prompt" => String(prompt),
     )
     return _AUTH_ENDPOINT * "?" * URIs.escapeuri(params)
 end
@@ -92,7 +92,7 @@ Start a one-shot HTTP server that captures the OAuth redirect, validates the
 to `result`.
 """
 function _start_callback_server(port::Int, expected_state::AbstractString;
-                                bind_host::AbstractString="127.0.0.1")
+    bind_host::AbstractString="127.0.0.1")
     result = Channel{Any}(1)
     host_ip = Sockets.getaddrinfo(bind_host)
     server = HTTP.serve!(host_ip, port) do req
@@ -105,7 +105,7 @@ function _start_callback_server(port::Int, expected_state::AbstractString;
                 put!(result, ErrorException(msg))
                 return HTTP.Response(400, _callback_html(msg; success=false))
             end
-            code  = get(params, "code",  "")
+            code = get(params, "code", "")
             state = get(params, "state", "")
             if isempty(code)
                 put!(result, ErrorException("Callback missing `code` parameter"))
@@ -117,7 +117,7 @@ function _start_callback_server(port::Int, expected_state::AbstractString;
             end
             put!(result, code)
             return HTTP.Response(200, ["Content-Type" => "text/html"],
-                                 _callback_html("You're authenticated."))
+                _callback_html("You're authenticated."))
         catch e
             put!(result, e)
             return HTTP.Response(500, _callback_html("Internal error: $e"; success=false))
@@ -148,7 +148,7 @@ Run a one-shot HTTP server that captures the OAuth redirect, validates the
 state mismatch, or an OAuth error returned by Google.
 """
 function _wait_for_callback(port::Int, expected_state::AbstractString, timeout::Real;
-                            bind_host::AbstractString="127.0.0.1")
+    bind_host::AbstractString="127.0.0.1")
     server, result = _start_callback_server(port, expected_state; bind_host=bind_host)
     return _await_callback(result, server, timeout)
 end
@@ -160,22 +160,22 @@ Exchange an authorization `code` for `access_token` + `refresh_token`.
 Returns the parsed JSON token response.
 """
 function _exchange_code(; client_id::AbstractString,
-                         client_secret::AbstractString,
-                         code::AbstractString,
-                         code_verifier::AbstractString,
-                         redirect_uri::AbstractString,
-                         token_endpoint::AbstractString=_TOKEN_ENDPOINT)
+    client_secret::AbstractString,
+    code::AbstractString,
+    code_verifier::AbstractString,
+    redirect_uri::AbstractString,
+    token_endpoint::AbstractString=_TOKEN_ENDPOINT)
     body = URIs.escapeuri(Dict(
-        "grant_type"    => "authorization_code",
-        "code"          => String(code),
-        "client_id"     => String(client_id),
+        "grant_type" => "authorization_code",
+        "code" => String(code),
+        "client_id" => String(client_id),
         "client_secret" => String(client_secret),
-        "redirect_uri"  => String(redirect_uri),
+        "redirect_uri" => String(redirect_uri),
         "code_verifier" => String(code_verifier),
     ))
     resp = HTTP.post(token_endpoint,
-                     ["Content-Type" => "application/x-www-form-urlencoded"],
-                     body; status_exception=false)
+        ["Content-Type" => "application/x-www-form-urlencoded"],
+        body; status_exception=false)
     if resp.status != 200
         error("Token exchange failed: " * _parse_google_error_body(resp.body, resp.status))
     end
@@ -212,13 +212,13 @@ function _save_user_credentials_to_well_known(creds::UserCredentials)
     if !Sys.iswindows()
         dir_mode = stat(dir).mode & 0o777
         if (dir_mode & 0o077) != 0
-            @warn "ADC directory is group/world-accessible" path=dir mode=string(dir_mode, base=8)
+            @warn "ADC directory is group/world-accessible" path = dir mode = string(dir_mode, base=8)
         end
     end
 
     payload = Dict(
-        "type"          => "authorized_user",
-        "client_id"     => creds.client_id,
+        "type" => "authorized_user",
+        "client_id" => creds.client_id,
         "client_secret" => creds.client_secret,
         "refresh_token" => creds.refresh_token,
     )
@@ -269,17 +269,17 @@ Run the Installed-App OAuth 2.0 flow with PKCE:
 A `CachedCredentials{UserCredentials}` ready for use with any service client.
 """
 function authorize_via_browser(; client_id::AbstractString,
-                                client_secret::AbstractString,
-                                scopes::Vector{<:AbstractString}=[_DEFAULT_SCOPE],
-                                port::Int=0,
-                                open_browser::Bool=true,
-                                browser_opener::Function=open_url,
-                                save_adc::Bool=false,
-                                timeout::Real=60,
-                                bind_host::AbstractString="127.0.0.1",
-                                token_endpoint::AbstractString=_TOKEN_ENDPOINT,
-                                state::Union{AbstractString, Nothing}=nothing,
-                                code_verifier::Union{AbstractString, Nothing}=nothing)
+    client_secret::AbstractString,
+    scopes::Vector{<:AbstractString}=[_DEFAULT_SCOPE],
+    port::Int=0,
+    open_browser::Bool=true,
+    browser_opener::Function=open_url,
+    save_adc::Bool=false,
+    timeout::Real=60,
+    bind_host::AbstractString="127.0.0.1",
+    token_endpoint::AbstractString=_TOKEN_ENDPOINT,
+    state::Union{AbstractString,Nothing}=nothing,
+    code_verifier::Union{AbstractString,Nothing}=nothing)
     actual_port = port == 0 ? _free_port() : port
     redirect_uri = "http://$(bind_host):$(actual_port)/"
 
@@ -297,19 +297,23 @@ function authorize_via_browser(; client_id::AbstractString,
     )
 
     server, result = _start_callback_server(actual_port, actual_state; bind_host=bind_host)
-
-    if open_browser
-        opened = browser_opener(url)
-        if !opened
-            println("Could not open a browser. Please visit this URL to authorize:")
+    code = try
+        if open_browser
+            opened = browser_opener(url)
+            if !opened
+                println("Could not open a browser. Please visit this URL to authorize:")
+                println(url)
+            end
+        else
+            println("Open the following URL in a browser to authorize:")
             println(url)
         end
-    else
-        println("Open the following URL in a browser to authorize:")
-        println(url)
-    end
 
-    code = _await_callback(result, server, timeout)
+        _await_callback(result, server, timeout)
+    catch
+        close(server)
+        rethrow()
+    end
 
     resp = _exchange_code(;
         client_id, client_secret, code, code_verifier=verifier, redirect_uri,
