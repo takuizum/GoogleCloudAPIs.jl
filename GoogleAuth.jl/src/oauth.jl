@@ -85,14 +85,14 @@ function _callback_html(message::AbstractString; success::Bool=true)
 end
 
 """
-    _wait_for_callback(port, expected_state, timeout; bind_host="127.0.0.1") -> String
+    _start_callback_server(port, expected_state; bind_host="127.0.0.1") -> (server, result)
 
-Run a one-shot HTTP server that captures the OAuth redirect, validates the
-`state` parameter, and returns the authorization `code`. Throws on timeout,
-state mismatch, or an OAuth error returned by Google.
+Start a one-shot HTTP server that captures the OAuth redirect, validates the
+`state` parameter, and writes either the authorization `code` or an exception
+to `result`.
 """
-function _wait_for_callback(port::Int, expected_state::AbstractString, timeout::Real;
-                            bind_host::AbstractString="127.0.0.1")
+function _start_callback_server(port::Int, expected_state::AbstractString;
+                                bind_host::AbstractString="127.0.0.1")
     result = Channel{Any}(1)
     host_ip = Sockets.getaddrinfo(bind_host)
     server = HTTP.serve!(host_ip, port) do req
@@ -123,7 +123,10 @@ function _wait_for_callback(port::Int, expected_state::AbstractString, timeout::
             return HTTP.Response(500, _callback_html("Internal error: $e"; success=false))
         end
     end
+    return server, result
+end
 
+function _await_callback(result::Channel, server, timeout::Real)
     try
         timer = Timer(timeout) do _t
             isready(result) || put!(result, ErrorException("Timeout waiting for OAuth callback ($(timeout)s)"))
@@ -135,6 +138,19 @@ function _wait_for_callback(port::Int, expected_state::AbstractString, timeout::
     finally
         close(server)
     end
+end
+
+"""
+    _wait_for_callback(port, expected_state, timeout; bind_host="127.0.0.1") -> String
+
+Run a one-shot HTTP server that captures the OAuth redirect, validates the
+`state` parameter, and returns the authorization `code`. Throws on timeout,
+state mismatch, or an OAuth error returned by Google.
+"""
+function _wait_for_callback(port::Int, expected_state::AbstractString, timeout::Real;
+                            bind_host::AbstractString="127.0.0.1")
+    server, result = _start_callback_server(port, expected_state; bind_host=bind_host)
+    return _await_callback(result, server, timeout)
 end
 
 """
@@ -223,7 +239,8 @@ Run the Installed-App OAuth 2.0 flow with PKCE:
 
 1. Start a one-shot HTTP server on `bind_host:port` (random port by default).
 2. Open the user's browser to Google's authorization endpoint
-   (or print the URL when `open_browser=false`).
+   (or print the URL when `open_browser=false`), after the callback listener
+   is already ready.
 3. Wait for Google to redirect back with an authorization code.
 4. Exchange the code for an access + refresh token at the token endpoint.
 5. Wrap the result in `CachedCredentials` (auto-refreshing).
@@ -234,6 +251,7 @@ Run the Installed-App OAuth 2.0 flow with PKCE:
 - `scopes::Vector{String}`    — Requested scopes (defaults to `cloud-platform`)
 - `port::Int=0`               — Local callback port; `0` requests a free one
 - `open_browser::Bool=true`   — Open the URL automatically when possible
+- `browser_opener::Function`   — Hook for tests/custom launchers (defaults to `open_url`)
 - `save_adc::Bool=false`      — Persist the refresh token to the well-known ADC file.
   **Security warning:** When `true`, the refresh token (a long-lived credential that
   can be used to obtain new access tokens indefinitely) is written in plaintext to
@@ -255,6 +273,7 @@ function authorize_via_browser(; client_id::AbstractString,
                                 scopes::Vector{<:AbstractString}=[_DEFAULT_SCOPE],
                                 port::Int=0,
                                 open_browser::Bool=true,
+                                browser_opener::Function=open_url,
                                 save_adc::Bool=false,
                                 timeout::Real=60,
                                 bind_host::AbstractString="127.0.0.1",
@@ -277,8 +296,10 @@ function authorize_via_browser(; client_id::AbstractString,
         state=actual_state, code_challenge=challenge,
     )
 
+    server, result = _start_callback_server(actual_port, actual_state; bind_host=bind_host)
+
     if open_browser
-        opened = open_url(url)
+        opened = browser_opener(url)
         if !opened
             println("Could not open a browser. Please visit this URL to authorize:")
             println(url)
@@ -288,7 +309,7 @@ function authorize_via_browser(; client_id::AbstractString,
         println(url)
     end
 
-    code = _wait_for_callback(actual_port, actual_state, timeout; bind_host=bind_host)
+    code = _await_callback(result, server, timeout)
 
     resp = _exchange_code(;
         client_id, client_secret, code, code_verifier=verifier, redirect_uri,
