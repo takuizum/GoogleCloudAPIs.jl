@@ -377,6 +377,51 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
         end
     end
 
+    @testset "authorize_via_browser starts callback server before opening browser" begin
+        token_port = GoogleAuth._free_port()
+        token_server = HTTP.serve!(token_port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                """{"access_token":"RACE_AT","expires_in":3600,"refresh_token":"RACE_RT","token_type":"Bearer"}""")
+        end
+
+        callback_port = GoogleAuth._free_port()
+        fixed_state = "browser-opens-after-listener"
+        opener_calls = Ref(0)
+
+        opener = url -> begin
+            opener_calls[] += 1
+            parsed = URIs.URI(url)
+            params = Dict(URIs.queryparampairs(parsed))
+            @test params["redirect_uri"] == "http://127.0.0.1:$callback_port/"
+            @test params["state"] == fixed_state
+            resp = HTTP.get("http://127.0.0.1:$callback_port/?code=RACE_CODE&state=$fixed_state")
+            @test resp.status == 200
+            true
+        end
+
+        auth_task = @async redirect_stdout(devnull) do
+            authorize_via_browser(;
+                client_id="test-client",
+                client_secret="test-secret",
+                scopes=["scope1"],
+                port=callback_port,
+                open_browser=true,
+                browser_opener=opener,
+                token_endpoint="http://127.0.0.1:$token_port/",
+                state=fixed_state,
+                timeout=10,
+            )
+        end
+
+        try
+            creds = fetch(auth_task)
+            @test opener_calls[] == 1
+            @test creds.inner.refresh_token == "RACE_RT"
+        finally
+            close(token_server)
+        end
+    end
+
     @testset "authorize_via_browser persists ADC when save_adc=true" begin
         token_port = GoogleAuth._free_port()
         token_server = HTTP.serve!(token_port) do _req
