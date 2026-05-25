@@ -4,13 +4,47 @@
 #
 # Pre-requisites:
 #   1. Authenticate: gcloud auth application-default login
-#   2. Set PROJECT_ID below or export the env variable GOOGLE_CLOUD_PROJECT.
+#   2. Set GC2JL_PROJECT_ID below. It is repo-specific and avoids leaking into
+#      unrelated tools like Gemini CLI. GOOGLE_CLOUD_PROJECT is still accepted
+#      as a fallback for existing setups.
 #   3. Run: julia --project=.. examples/01_practical_workflow.jl
 #
 # Nothing is committed to git from this directory.
 
 using Pkg
-Pkg.activate(joinpath(@__DIR__, ".."))
+# Note: Pkg.activate(@__DIR__) is intentionally omitted to allow running
+# this script with the root project environment (julia --project=.).
+
+# Simple .env loader
+let env_path = joinpath(@__DIR__, ".env")
+    if isfile(env_path)
+        for line in eachline(env_path)
+            line = strip(line)
+            # Skip empty lines and comments
+            if isempty(line) || startswith(line, "#") continue end
+
+            # Split only on the first '='
+            m = match(r"^([^=]+)=(.*)$", line)
+            if m !== nothing
+                key = strip(m.captures[1])
+                val = strip(m.captures[2])
+
+                # Remove inline comments if not inside quotes
+                if !startswith(val, "\"") && !startswith(val, "'")
+                    val = split(val, "#")[1] |> strip
+                end
+
+                # Strip surrounding quotes
+                if (startswith(val, "\"") && endswith(val, "\"")) ||
+                   (startswith(val, "'") && endswith(val, "'"))
+                    val = val[2:end-1]
+                end
+
+                ENV[key] = val
+            end
+        end
+    end
+end
 
 import GoogleAuth
 import BigQuery
@@ -18,7 +52,8 @@ import GoogleCloudStorage
 import GoogleCloudPubSub
 using Dates
 
-const PROJECT_ID = get(ENV, "GOOGLE_CLOUD_PROJECT", "YOUR_PROJECT_ID")
+const PROJECT_ID = get(ENV, "GC2JL_PROJECT_ID",
+    get(ENV, "GOOGLE_CLOUD_PROJECT", "YOUR_PROJECT_ID"))
 
 function section(title)
     println("\n" * "─"^50)
@@ -55,7 +90,7 @@ println("  Arrow rows: $(length(collect(tbl.x)))")
 section("BigQuery: dataset + table lifecycle")
 
 suffix = lowercase(string(round(Int, time()), base=16))
-ds_id  = "gc2jl_example_$(suffix)"
+ds_id = "gc2jl_example_$(suffix)"
 tbl_id = "events"
 
 try
@@ -63,9 +98,9 @@ try
     println("  create_dataset => $(ds.dataset_id) ($(ds.location))")
 
     schema = [
-        BigQuery.TableFieldSchema("id",   "INT64";  mode="REQUIRED"),
+        BigQuery.TableFieldSchema("id", "INT64"; mode="REQUIRED"),
         BigQuery.TableFieldSchema("name", "STRING"),
-        BigQuery.TableFieldSchema("ts",   "TIMESTAMP"),
+        BigQuery.TableFieldSchema("ts", "TIMESTAMP"),
     ]
     t = BigQuery.create_table(bq, ds_id, tbl_id, schema)
     println("  create_table   => $(t.table_id) ($(length(t.schema)) fields)")
@@ -73,18 +108,29 @@ try
     listed = collect(BigQuery.list_tables(bq, ds_id))
     println("  list_tables    => $(length(listed)) table(s)")
 
-    BigQuery.query(bq, """
-        INSERT INTO `$PROJECT_ID.$ds_id.$tbl_id` (id, name, ts)
-        VALUES (1, 'Alice', CURRENT_TIMESTAMP()),
-               (2, 'Bob',   CURRENT_TIMESTAMP())
-    """)
+    BigQuery.query(
+        bq,
+        """
+    INSERT INTO `$PROJECT_ID.$ds_id.$tbl_id` (id, name, ts)
+    VALUES (1, 'Alice', CURRENT_TIMESTAMP()),
+           (2, 'Bob',   CURRENT_TIMESTAMP())
+"""
+    )
     println("  INSERT OK")
 
     result = BigQuery.query(bq, "SELECT id, name FROM `$PROJECT_ID.$ds_id.$tbl_id` ORDER BY id")
     println("  SELECT => $([r.name for r in result])")
 finally
-    try; BigQuery.delete_table(bq, ds_id, tbl_id);            println("  delete_table OK");   catch; end
-    try; BigQuery.delete_dataset(bq, ds_id; delete_contents=true); println("  delete_dataset OK"); catch; end
+    try
+        BigQuery.delete_table(bq, ds_id, tbl_id)
+        println("  delete_table OK")
+    catch
+    end
+    try
+        BigQuery.delete_dataset(bq, ds_id; delete_contents=true)
+        println("  delete_dataset OK")
+    catch
+    end
 end
 
 # ─────────────────────────────────────────────────────────────
@@ -101,7 +147,7 @@ try
 
     payload = "Hello from GoogleCloudAPIs.jl @ $(now())"
     obj = GoogleCloudStorage.upload_object(gcs, bucket_name, "hello.txt",
-                                           payload; content_type="text/plain")
+        payload; content_type="text/plain")
     println("  upload_object  => $(obj.name) ($(obj.size) bytes)")
 
     downloaded = GoogleCloudStorage.download_object(gcs, bucket_name, "hello.txt")
@@ -124,7 +170,11 @@ try
     end
     println("  delete_object  x$(length(objs))")
 finally
-    try; GoogleCloudStorage.delete_bucket(gcs, bucket_name); println("  delete_bucket OK"); catch; end
+    try
+        GoogleCloudStorage.delete_bucket(gcs, bucket_name)
+        println("  delete_bucket OK")
+    catch
+    end
 end
 
 # ─────────────────────────────────────────────────────────────
@@ -134,7 +184,7 @@ section("Pub/Sub: topic + subscription + publish + pull")
 ps = GoogleCloudPubSub.PubSubClient(project=PROJECT_ID, creds=creds)
 
 topic_id = "gc2jl-example-topic-$suffix"
-sub_id   = "gc2jl-example-sub-$suffix"
+sub_id = "gc2jl-example-sub-$suffix"
 
 # Pre-flight: skip cleanly if Pub/Sub API is not enabled
 try
@@ -159,7 +209,7 @@ try
 
     # Single publish
     mid = GoogleCloudPubSub.publish(ps, topic_id, "hello from julia";
-                                    attributes=Dict("src" => "example"))
+        attributes=Dict("src" => "example"))
     println("  publish single => $mid")
 
     # Batch publish
@@ -189,8 +239,16 @@ try
         println("    data=$(String(m.data))  attrs=$(m.attributes)")
     end
 finally
-    try; GoogleCloudPubSub.delete_subscription(ps, sub_id);   println("  delete_sub OK");   catch; end
-    try; GoogleCloudPubSub.delete_topic(ps, topic_id);         println("  delete_topic OK"); catch; end
+    try
+        GoogleCloudPubSub.delete_subscription(ps, sub_id)
+        println("  delete_sub OK")
+    catch
+    end
+    try
+        GoogleCloudPubSub.delete_topic(ps, topic_id)
+        println("  delete_topic OK")
+    catch
+    end
 end
 
 println("\n=== All examples completed successfully ===")
