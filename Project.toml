@@ -1,14 +1,8 @@
-# Development environment for the GoogleCloudAPIs.jl monorepo.
-# Run `julia --project=. -e 'using Pkg; Pkg.develop([...]); Pkg.instantiate()'`
-# to set up the workspace. Compatible with Julia 1.10+.
-#
-# Note: [workspace] (Julia 1.11+) is intentionally omitted so that this file
-# works with the minimum supported Julia version (1.10).
-
 [deps]
-Aqua               = "4c88cf16-eb10-579e-8560-4a9242c79595"
-BigQuery           = "445db125-8b00-41a4-910c-5a1c36509841"
-GoogleApiCore      = "5b46693f-3346-4d48-b018-2afc076565e2"
-GoogleAuth         = "c7034c12-f568-48fa-9679-9976dce9d37e"
-GoogleCloudPubSub  = "1a5f873f-a1d6-4e7b-91c4-4c6e3977c38e"
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+BigQuery = "445db125-8b00-41a4-910c-5a1c36509841"
+GoogleApiCore = "5b46693f-3346-4d48-b018-2afc076565e2"
+GoogleAuth = "c7034c12-f568-48fa-9679-9976dce9d37e"
+GoogleCloudPubSub = "1a5f873f-a1d6-4e7b-91c4-4c6e3977c38e"
 GoogleCloudStorage = "7a95fb5f-a5a2-4f82-9cda-bd4cc307a60f"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
