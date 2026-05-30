@@ -1,7 +1,7 @@
 name = "GoogleAuth"
 uuid = "c7034c12-f568-48fa-9679-9976dce9d37e"
-authors = ["Takumi Itamiya"]
 version = "0.1.0"
+authors = ["Takumi Itamiya"]
 
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -14,23 +14,23 @@ SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-
-[targets]
-test = ["Test", "Aqua"]
-
 [compat]
-julia = "1.10"
+Aqua = "0.8"
 Base64 = "1"
 Dates = "1"
 HTTP = "1"
-JSON = "0.21"
+JSON = "0.21, 1"
 JSONWebTokens = "1"
 Random = "1"
 SHA = "0.7"
 Sockets = "1"
-URIs = "1"
 Test = "1"
-Aqua = "0.8"
+URIs = "1"
+julia = "1.10"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "Aqua"]
