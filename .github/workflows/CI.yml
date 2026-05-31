@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # ──────────────────────────────────────────────
   # 1. 静的解析・コード品質チェック（高速・エミュレータ不要）
