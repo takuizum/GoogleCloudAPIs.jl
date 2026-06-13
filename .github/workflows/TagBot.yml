@@ -20,7 +20,7 @@ jobs:
           - GoogleAuth.jl
           - GoogleApiCore.jl
           - GoogleCloudStorage.jl
-          - BigQuery.jl
+          - GoogleBigQuery.jl
           - GoogleCloudPubSub.jl
     permissions:
       actions: read

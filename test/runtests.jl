@@ -4,7 +4,7 @@ const PACKAGES = [
     "GoogleAuth",
     "GoogleApiCore",
     "GoogleCloudStorage",
-    "BigQuery",
+    "GoogleBigQuery",
     "GoogleCloudPubSub"
 ]
 

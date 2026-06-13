@@ -9,7 +9,7 @@ Julia client libraries for Google Cloud Platform.
 | [`GoogleAuth`](@ref auth) | ADC, service account JWT, OAuth 2.0 browser flow |
 | [`GoogleApiCore`](@ref core) | HTTP retry, pagination, long-running operations |
 | [`GoogleCloudStorage`](@ref storage) | Cloud Storage JSON API |
-| [`BigQuery`](@ref bigquery) | BigQuery REST API |
+| [`GoogleBigQuery`](@ref bigquery) | BigQuery REST API |
 | [`GoogleCloudPubSub`](@ref pubsub) | Cloud Pub/Sub REST API |
 
 For installation and quick-start examples, see the [README](https://github.com/takuizum/GoogleCloudAPIs.jl).

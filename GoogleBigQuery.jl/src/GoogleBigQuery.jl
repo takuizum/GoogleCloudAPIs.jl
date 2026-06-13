@@ -1,4 +1,4 @@
-module BigQuery
+module GoogleBigQuery
 
 using Arrow
 using Base64
@@ -21,4 +21,4 @@ include("jobs.jl")
 include("datasets.jl")
 include("tables.jl")
 
-end # module BigQuery
+end # module GoogleBigQuery

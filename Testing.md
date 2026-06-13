@@ -66,7 +66,7 @@ Agentに対して、以下の順序でタスクをアサインすることを推
 1.  **フェーズ1**: `GoogleAuth.jl` の実装（ADCとメタデータサーバ連携の完遂）。
 2.  **フェーズ2**: `GoogleApiCore.jl` での `AIP-158` (ページネーション) と指数バックオフの共通化。
 3.  **フェーズ3**: `GoogleCloudStorage.jl` のプロトタイプ作成（`CloudStore.jl` の成果を統合） [27]。
-4.  **フェーズ4**: `BigQuery.jl` における `Arrow.jl` を用いた高速読込の実装 。
+4.  **フェーズ4**: `GoogleBigQuery.jl` における `Arrow.jl` を用いた高速読込の実装 。
 
 この構成により、Python SDKの利便性とJuliaの実行速度を両立した、Agentが自律的に拡張可能なSDK基盤が整います。
 

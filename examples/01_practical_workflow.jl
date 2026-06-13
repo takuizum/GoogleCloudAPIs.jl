@@ -47,7 +47,7 @@ let env_path = joinpath(@__DIR__, ".env")
 end
 
 import GoogleAuth
-import BigQuery
+import GoogleBigQuery
 import GoogleCloudStorage
 import GoogleCloudPubSub
 using Dates
@@ -75,13 +75,13 @@ println("  token_type=$(token.token_type), expires_in=$(token.expires_in)s")
 # 2. BigQuery — simple query
 # ─────────────────────────────────────────────────────────────
 section("BigQuery: simple query")
-bq = BigQuery.BQClient(PROJECT_ID; creds=creds)
+bq = GoogleBigQuery.BQClient(PROJECT_ID; creds=creds)
 
-rows = BigQuery.query(bq, "SELECT 1 AS num, 'hello' AS msg")
+rows = GoogleBigQuery.query(bq, "SELECT 1 AS num, 'hello' AS msg")
 println("  SELECT 1 => $(rows[1])")
 
 # Arrow format (client-side JSON→Arrow conversion)
-tbl = BigQuery.query(bq, "SELECT 1 AS x, 'a' AS s UNION ALL SELECT 2, 'b'"; format=:arrow)
+tbl = GoogleBigQuery.query(bq, "SELECT 1 AS x, 'a' AS s UNION ALL SELECT 2, 'b'"; format=:arrow)
 println("  Arrow rows: $(length(collect(tbl.x)))")
 
 # ─────────────────────────────────────────────────────────────
@@ -94,21 +94,21 @@ ds_id = "gc2jl_example_$(suffix)"
 tbl_id = "events"
 
 try
-    ds = BigQuery.create_dataset(bq, ds_id; location="US")
+    ds = GoogleBigQuery.create_dataset(bq, ds_id; location="US")
     println("  create_dataset => $(ds.dataset_id) ($(ds.location))")
 
     schema = [
-        BigQuery.TableFieldSchema("id", "INT64"; mode="REQUIRED"),
-        BigQuery.TableFieldSchema("name", "STRING"),
-        BigQuery.TableFieldSchema("ts", "TIMESTAMP"),
+        GoogleBigQuery.TableFieldSchema("id", "INT64"; mode="REQUIRED"),
+        GoogleBigQuery.TableFieldSchema("name", "STRING"),
+        GoogleBigQuery.TableFieldSchema("ts", "TIMESTAMP"),
     ]
-    t = BigQuery.create_table(bq, ds_id, tbl_id, schema)
+    t = GoogleBigQuery.create_table(bq, ds_id, tbl_id, schema)
     println("  create_table   => $(t.table_id) ($(length(t.schema)) fields)")
 
-    listed = collect(BigQuery.list_tables(bq, ds_id))
+    listed = collect(GoogleBigQuery.list_tables(bq, ds_id))
     println("  list_tables    => $(length(listed)) table(s)")
 
-    BigQuery.query(
+    GoogleBigQuery.query(
         bq,
         """
     INSERT INTO `$PROJECT_ID.$ds_id.$tbl_id` (id, name, ts)
@@ -118,16 +118,16 @@ try
     )
     println("  INSERT OK")
 
-    result = BigQuery.query(bq, "SELECT id, name FROM `$PROJECT_ID.$ds_id.$tbl_id` ORDER BY id")
+    result = GoogleBigQuery.query(bq, "SELECT id, name FROM `$PROJECT_ID.$ds_id.$tbl_id` ORDER BY id")
     println("  SELECT => $([r.name for r in result])")
 finally
     try
-        BigQuery.delete_table(bq, ds_id, tbl_id)
+        GoogleBigQuery.delete_table(bq, ds_id, tbl_id)
         println("  delete_table OK")
     catch
     end
     try
-        BigQuery.delete_dataset(bq, ds_id; delete_contents=true)
+        GoogleBigQuery.delete_dataset(bq, ds_id; delete_contents=true)
         println("  delete_dataset OK")
     catch
     end
