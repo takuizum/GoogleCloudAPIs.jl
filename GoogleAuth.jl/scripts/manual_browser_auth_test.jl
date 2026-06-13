@@ -84,6 +84,11 @@ function load_client_credentials()
         error("Set GOOGLE_AUTH_CLIENT_ID or point GOOGLE_AUTH_CLIENT_SECRET_FILE to a client secret JSON.\n" *
               "Create one at: https://console.cloud.google.com/apis/credentials")
     end
+    if isempty(client_secret)
+        # Fail fast here rather than after the user completes the browser flow.
+        error("GOOGLE_AUTH_CLIENT_SECRET (or GOOGLE_CLIENT_SECRET) is not set. " *
+              "Desktop-app OAuth clients require the client secret for the token exchange.")
+    end
 
     return client_id, client_secret
 end
@@ -108,7 +113,15 @@ creds = authorize_via_browser(;
 
 println("\nAuthentication completed.")
 println("Credential type: ", typeof(creds))
-println("Auth Header: ", authorization_header(creds))
+# The live access token is redacted by default so it cannot leak via
+# terminal scrollback, CI logs, or copy-pasted issues.
+if lowercase(get(ENV, "GOOGLE_AUTH_PRINT_TOKEN", "false")) == "true"
+    println("Auth Header: ", authorization_header(creds))
+else
+    token = GoogleAuth.get_token(creds)
+    println("Auth Header: Authorization => Bearer <redacted> " *
+            "(expires_in=$(token.expires_in)s; set GOOGLE_AUTH_PRINT_TOKEN=true to print)")
+end
 
 if save_adc
     println("ADC has been saved to the well-known location.")

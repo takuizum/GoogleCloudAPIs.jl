@@ -296,6 +296,9 @@ end
         end
     end
 
+    # ── ADC loading (mock credentials file) ──────────────────
+    include("adc_test.jl")
+
     # ── Emulator integration tests ───────────────────────────
     started_container = nothing
     if !haskey(ENV, "STORAGE_EMULATOR_HOST")
