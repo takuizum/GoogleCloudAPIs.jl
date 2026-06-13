@@ -30,8 +30,8 @@ Column values are converted to Julia types — `INT64 → Int64`,
 `DATE → Dates.Date`, `TIME → Dates.Time`, `BYTES → Vector{UInt8}`,
 `RECORD/STRUCT →` nested `NamedTuple`, `REPEATED →` `Vector`. `NUMERIC` and
 `BIGNUMERIC` are kept as lossless `String`s (parse explicitly if you can
-tolerate `Float64` rounding); SQL `NULL` becomes `missing`. See
-[`_coerce_value`](@ref) for the full table.
+tolerate `Float64` rounding); SQL `NULL` becomes `missing`. See the
+`_coerce_value` docstring for the full table.
 
 Note: true zero-copy Arrow streaming requires the BigQuery Storage Read API
 (gRPC). That is not implemented in v0.1. See the project issue tracker for
