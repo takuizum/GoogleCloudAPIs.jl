@@ -68,3 +68,22 @@ end
 
 Base.showerror(io::IO, e::NotFoundError) =
     print(io, "NotFoundError: resource not found — $(e.resource)")
+
+"""
+    TimeoutError(operation, seconds)
+
+Raised when a client-side deadline expires while waiting for a server-side
+operation to complete (e.g. polling a BigQuery job or a long-running
+operation).
+
+Fields:
+- `operation::String` — description of what was being waited on
+- `seconds::Float64`  — the deadline that was exceeded, in seconds
+"""
+struct TimeoutError <: Exception
+    operation::String
+    seconds::Float64
+end
+
+Base.showerror(io::IO, e::TimeoutError) =
+    print(io, "TimeoutError: $(e.operation) (waited $(e.seconds)s)")

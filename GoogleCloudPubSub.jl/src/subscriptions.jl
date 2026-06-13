@@ -89,6 +89,10 @@ list_subscriptions(client::PubSubClient) =
 Pull up to `max_messages` messages from a subscription. Returned messages
 include an `ack_id` field which must be passed to [`acknowledge`](@ref) to
 permanently remove them from the subscription.
+
+Transient errors (429/5xx) are retried automatically; under Pub/Sub's
+at-least-once semantics a retried pull may leave messages from the failed
+attempt leased until their ack deadline expires.
 """
 function pull(client::PubSubClient, sub_id::AbstractString;
               max_messages::Int=10, return_immediately::Bool=true)
@@ -97,7 +101,8 @@ function pull(client::PubSubClient, sub_id::AbstractString;
         "returnImmediately" => return_immediately,
     ))
     path = _subscription_path(client, sub_id) * ":pull"
-    resp = _request(client, "POST", path; body=body, content_type="application/json")
+    resp = _request(client, "POST", path; body=body, content_type="application/json",
+                    idempotent=true)
     doc = JSON.parse(IOBuffer(resp.body))
     raw = get(doc, "receivedMessages", nothing)
     raw === nothing && return PubSubMessage[]
@@ -108,13 +113,16 @@ end
     acknowledge(client, subscription_id, ack_ids::Vector{<:AbstractString}) -> Nothing
 
 Acknowledge one or more messages so the server stops redelivering them.
+Transient errors (429/5xx) are retried automatically — re-acking an already
+acknowledged message is harmless.
 """
 function acknowledge(client::PubSubClient, sub_id::AbstractString,
                      ack_ids::Vector{<:AbstractString})
     isempty(ack_ids) && return nothing
     body = JSON.json(Dict("ackIds" => collect(String, ack_ids)))
     path = _subscription_path(client, sub_id) * ":acknowledge"
-    _request(client, "POST", path; body=body, content_type="application/json")
+    _request(client, "POST", path; body=body, content_type="application/json",
+             idempotent=true)
     return nothing
 end
 

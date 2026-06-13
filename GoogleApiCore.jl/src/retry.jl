@@ -22,16 +22,17 @@ Base.@kwdef struct RetryConfig
 end
 
 """
-Determines if a given HTTP request should be retried based on the method and status code.
+    should_retry(method, status; idempotent=false) -> Bool
+
+Determines if a given HTTP request should be retried based on the method and
+status code. Only 429 and 5xx responses are retryable. GET and PUT are always
+safe to retry; POST (and other methods) are retried only when the caller
+declares the request `idempotent` (e.g. Pub/Sub `pull`/`acknowledge`).
 """
-function should_retry(method::String, status::Integer)
+function should_retry(method::String, status::Integer; idempotent::Bool=false)
     # Retry on 5xx or 429 Too Many Requests
     if status == 429 || (500 <= status < 600)
-        # GET and PUT are always safe to retry.
-        # Note: POST is generally not idempotent and shouldn't be retried
-        # automatically unless there is a precondition like if-generation-match.
-        # This basic implementation retries GET and PUT.
-        if method == "GET" || method == "PUT"
+        if method == "GET" || method == "PUT" || idempotent
             return true
         end
     end
@@ -39,7 +40,28 @@ function should_retry(method::String, status::Integer)
 end
 
 """
-    do_request_with_retry(method, url, headers, body; config, sign!, kwargs...)
+    _retry_delay(config, attempt, retry_after) -> Float64
+
+Compute the sleep time before the next attempt. When the server sent a
+`Retry-After` header with a non-negative integer number of seconds, that value
+(capped at `config.max_delay`) takes precedence over the computed exponential
+backoff. HTTP-date `Retry-After` values are not parsed and fall back to
+backoff. A 10% random jitter is added in both cases.
+"""
+function _retry_delay(config::RetryConfig, attempt::Int,
+                      retry_after::Union{Nothing, AbstractString})
+    delay = min(config.initial_delay * (config.multiplier ^ (attempt - 1)), config.max_delay)
+    if retry_after !== nothing
+        secs = tryparse(Int, strip(retry_after))
+        if secs !== nothing && secs >= 0
+            delay = min(Float64(secs), config.max_delay)
+        end
+    end
+    return delay + rand() * 0.1 * delay
+end
+
+"""
+    do_request_with_retry(method, url, headers, body; config, sign!, idempotent, kwargs...)
 
 Execute an HTTP request with exponential backoff and jitter.
 
@@ -48,10 +70,16 @@ mutates the request in-place before each attempt — use it to inject auth
 headers (e.g. `req -> CloudBase.GCP.gcpsign!(req; credentials=creds)`).
 The request object is rebuilt from scratch on every retry so that a refreshed
 token is used automatically.
+
+`idempotent=true` declares that repeating this request is safe, which enables
+retry of 429/5xx responses for methods other than GET/PUT (notably POST).
+A `Retry-After` header with an integer number of seconds is honoured (capped
+at `config.max_delay`).
 """
 function do_request_with_retry(method::String, url::String, headers=[], body="";
                                 config::RetryConfig=RetryConfig(),
                                 sign! = nothing,
+                                idempotent::Bool=false,
                                 kwargs...)
     body_bytes = body isa AbstractString ? Vector{UInt8}(codeunits(body)) : body
     attempt = 0
@@ -63,7 +91,8 @@ function do_request_with_retry(method::String, url::String, headers=[], body="";
         resp = HTTP.request(req.method, req.target, req.headers, req.body;
                             status_exception=false, kwargs...)
 
-        if attempt >= config.max_attempts || !should_retry(method, resp.status)
+        if attempt >= config.max_attempts ||
+           !should_retry(method, resp.status; idempotent=idempotent)
             if resp.status == 401 || resp.status == 403
                 throw(AuthError(_parse_api_error_body(resp.body, resp.status)))
             elseif resp.status == 404
@@ -74,11 +103,11 @@ function do_request_with_retry(method::String, url::String, headers=[], body="";
             return resp
         end
 
-        delay = min(config.initial_delay * (config.multiplier ^ (attempt - 1)), config.max_delay)
-        jitter = rand() * 0.1 * delay
-        sleep_time = delay + jitter
+        retry_after = HTTP.header(resp, "Retry-After", "")
+        sleep_time = _retry_delay(config, attempt,
+                                  isempty(retry_after) ? nothing : retry_after)
 
-        @info "Request failed with status $(resp.status). Retrying in $(round(sleep_time, digits=2)) seconds..."
+        @debug "Request failed with status $(resp.status). Retrying in $(round(sleep_time, digits=2)) seconds..." attempt max_attempts = config.max_attempts
         sleep(sleep_time)
     end
 end
