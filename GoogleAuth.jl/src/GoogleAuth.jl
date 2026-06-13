@@ -11,12 +11,13 @@ import SHA
 import Sockets
 
 export Credentials, Token, ServiceAccountCredentials, UserCredentials, ComputeCredentials
-export ImpersonatedCredentials, CachedCredentials
+export ImpersonatedCredentials, CachedCredentials, ExternalAccountCredentials
 export get_application_default, get_token, authorization_header
 export with_scopes
 export authorize_via_browser, open_url
 
 include("credentials.jl")
+include("wif.jl")
 include("metadata.jl")
 include("adc.jl")
 include("browser.jl")

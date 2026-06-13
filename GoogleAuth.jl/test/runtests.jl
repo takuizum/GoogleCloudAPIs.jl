@@ -651,6 +651,228 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
         end
     end
 
+    # ── ExternalAccountCredentials (Workload Identity Federation) ──
+    @testset "ExternalAccountCredentials constructor from dict" begin
+        d = Dict(
+            "type"               => "external_account",
+            "audience"           => "//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/pool/providers/gha",
+            "subject_token_type" => "urn:ietf:params:oauth:token-type:jwt",
+            "credential_source"  => Dict("file" => "/tmp/token.txt"),
+        )
+        c = ExternalAccountCredentials(d)
+        @test c isa Credentials
+        @test c.token_url == "https://sts.googleapis.com/v1/token"  # default
+        @test c.service_account_impersonation_url === nothing
+        @test isempty(c.scopes)
+
+        c2 = with_scopes(c, ["https://www.googleapis.com/auth/bigquery"])
+        @test c2.scopes == ["https://www.googleapis.com/auth/bigquery"]
+        @test c2.audience == c.audience
+    end
+
+    @testset "ExternalAccountCredentials rejects unsupported sources" begin
+        base = Dict(
+            "audience"           => "aud",
+            "subject_token_type" => "urn:ietf:params:oauth:token-type:jwt",
+        )
+        aws = merge(base, Dict("credential_source" => Dict("environment_id" => "aws1")))
+        @test_throws ErrorException ExternalAccountCredentials(aws)
+        execu = merge(base, Dict("credential_source" => Dict("executable" => Dict("command" => "x"))))
+        @test_throws ErrorException ExternalAccountCredentials(execu)
+        empty_src = merge(base, Dict("credential_source" => Dict{String,Any}()))
+        @test_throws ErrorException ExternalAccountCredentials(empty_src)
+        missing_aud = Dict("subject_token_type" => "jwt",
+                           "credential_source" => Dict("file" => "/x"))
+        @test_throws ErrorException ExternalAccountCredentials(missing_aud)
+    end
+
+    @testset "ExternalAccountCredentials show redacts" begin
+        c = ExternalAccountCredentials("my-audience", "urn:ietf:params:oauth:token-type:jwt",
+                                       "https://sts.googleapis.com/v1/token",
+                                       Dict("file" => "/secret/path/token"))
+        s = sprint(show, c)
+        @test occursin("my-audience", s)
+        @test occursin("source=<file>", s)
+        @test !occursin("/secret/path/token", s)
+    end
+
+    @testset "_fetch_subject_token: file text / file json" begin
+        mktempdir() do dir
+            txt = joinpath(dir, "tok.txt")
+            write(txt, "RAW-TOKEN\n")
+            @test GoogleAuth._fetch_subject_token(Dict("file" => txt)) == "RAW-TOKEN"
+
+            js = joinpath(dir, "tok.json")
+            write(js, """{"value":"JSON-TOKEN","other":1}""")
+            src = Dict("file" => js,
+                       "format" => Dict("type" => "json",
+                                        "subject_token_field_name" => "value"))
+            @test GoogleAuth._fetch_subject_token(src) == "JSON-TOKEN"
+
+            bad = Dict("file" => js,
+                       "format" => Dict("type" => "json",
+                                        "subject_token_field_name" => "nope"))
+            @test_throws ErrorException GoogleAuth._fetch_subject_token(bad)
+            @test_throws ErrorException GoogleAuth._fetch_subject_token(
+                Dict("file" => joinpath(dir, "missing.txt")))
+        end
+    end
+
+    @testset "_fetch_subject_token: url with headers (mock)" begin
+        port = GoogleAuth._free_port()
+        seen_header = Ref{String}("")
+        server = HTTP.serve!(port) do req
+            seen_header[] = something(HTTP.header(req, "Metadata"), "")
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                          """{"value":"URL-TOKEN"}""")
+        end
+        try
+            src = Dict(
+                "url"     => "http://127.0.0.1:$port/oidc",
+                "headers" => Dict("Metadata" => "True"),
+                "format"  => Dict("type" => "json",
+                                  "subject_token_field_name" => "value"),
+            )
+            @test GoogleAuth._fetch_subject_token(src) == "URL-TOKEN"
+            @test seen_header[] == "True"
+        finally
+            close(server)
+        end
+    end
+
+    @testset "WIF get_token: STS exchange without impersonation (mock)" begin
+        sts_port = GoogleAuth._free_port()
+        received = Ref{Dict{String,String}}()
+        sts_server = HTTP.serve!(sts_port) do req
+            pairs = URIs.queryparampairs(String(req.body))
+            received[] = Dict(String(k) => String(v) for (k, v) in pairs)
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                          JSON.json(Dict("access_token" => "STS-TOKEN",
+                                         "expires_in"   => 3599,
+                                         "token_type"   => "Bearer")))
+        end
+        try
+            mktempdir() do dir
+                tok = joinpath(dir, "oidc.txt")
+                write(tok, "SUBJECT-TOKEN")
+                creds = ExternalAccountCredentials(
+                    "my-audience", "urn:ietf:params:oauth:token-type:jwt",
+                    "http://127.0.0.1:$sts_port/v1/token",
+                    Dict("file" => tok);
+                    scopes=["https://www.googleapis.com/auth/devstorage.read_only"],
+                )
+                token = get_token(creds)
+                @test token.access_token == "STS-TOKEN"
+                @test token.expires_in == 3599
+
+                @test received[]["grant_type"] ==
+                      "urn:ietf:params:oauth:grant-type:token-exchange"
+                @test received[]["audience"] == "my-audience"
+                @test received[]["subject_token"] == "SUBJECT-TOKEN"
+                @test received[]["subject_token_type"] ==
+                      "urn:ietf:params:oauth:token-type:jwt"
+                @test received[]["requested_token_type"] ==
+                      "urn:ietf:params:oauth:token-type:access_token"
+                @test received[]["scope"] ==
+                      "https://www.googleapis.com/auth/devstorage.read_only"
+            end
+        finally
+            close(sts_server)
+        end
+    end
+
+    @testset "WIF get_token: STS + impersonation chain (mock)" begin
+        sts_port = GoogleAuth._free_port()
+        sts_server = HTTP.serve!(sts_port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                          JSON.json(Dict("access_token" => "STS-TOKEN",
+                                         "expires_in"   => 600,
+                                         "token_type"   => "Bearer")))
+        end
+
+        iam_port = GoogleAuth._free_port()
+        seen_auth = Ref{String}("")
+        expire_str = Dates.format(Dates.now(UTC) + Dates.Second(3600),
+                                  "yyyy-mm-ddTHH:MM:SS") * "Z"
+        iam_server = HTTP.serve!(iam_port) do req
+            seen_auth[] = something(HTTP.header(req, "Authorization"), "")
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                          JSON.json(Dict("accessToken" => "FINAL-TOKEN",
+                                         "expireTime"  => expire_str)))
+        end
+        try
+            mktempdir() do dir
+                tok = joinpath(dir, "oidc.txt")
+                write(tok, "SUBJECT-TOKEN")
+                creds = ExternalAccountCredentials(
+                    "aud", "urn:ietf:params:oauth:token-type:jwt",
+                    "http://127.0.0.1:$sts_port/v1/token",
+                    Dict("file" => tok);
+                    service_account_impersonation_url =
+                        "http://127.0.0.1:$iam_port/v1/projects/-/serviceAccounts/sa@p.iam:generateAccessToken",
+                )
+                token = get_token(creds)
+                @test token.access_token == "FINAL-TOKEN"
+                @test token.expires_in > 3000
+                # STS トークンが impersonation 呼び出しの Bearer になる
+                @test seen_auth[] == "Bearer STS-TOKEN"
+            end
+        finally
+            close(sts_server)
+            close(iam_server)
+        end
+    end
+
+    @testset "WIF get_token: STS error is sanitized, no token leak" begin
+        sts_port = GoogleAuth._free_port()
+        sts_server = HTTP.serve!(sts_port) do _req
+            HTTP.Response(400, ["Content-Type" => "application/json"],
+                          """{"error":"invalid_grant","error_description":"Invalid audience."}""")
+        end
+        try
+            mktempdir() do dir
+                tok = joinpath(dir, "oidc.txt")
+                write(tok, "SECRET-SUBJECT-TOKEN")
+                creds = ExternalAccountCredentials(
+                    "aud", "urn:ietf:params:oauth:token-type:jwt",
+                    "http://127.0.0.1:$sts_port/v1/token",
+                    Dict("file" => tok),
+                )
+                err = try get_token(creds); nothing catch e; e end
+                @test err !== nothing
+                msg = sprint(showerror, err)
+                @test occursin("invalid_grant", msg)
+                @test !occursin("SECRET-SUBJECT-TOKEN", msg)
+            end
+        finally
+            close(sts_server)
+        end
+    end
+
+    @testset "ADC dispatches external_account to WIF" begin
+        mktempdir() do dir
+            tok = joinpath(dir, "oidc.txt")
+            write(tok, "T")
+            adc = joinpath(dir, "adc.json")
+            write(adc, JSON.json(Dict(
+                "type"               => "external_account",
+                "audience"           => "//iam.googleapis.com/projects/1/pools/p/providers/x",
+                "subject_token_type" => "urn:ietf:params:oauth:token-type:jwt",
+                "token_url"          => "https://sts.googleapis.com/v1/token",
+                "credential_source"  => Dict("file" => tok),
+            )))
+            old = get(ENV, "GOOGLE_APPLICATION_CREDENTIALS", nothing)
+            ENV["GOOGLE_APPLICATION_CREDENTIALS"] = adc
+            try
+                creds = get_application_default()
+                @test creds isa CachedCredentials{ExternalAccountCredentials}
+            finally
+                old === nothing ? delete!(ENV, "GOOGLE_APPLICATION_CREDENTIALS") :
+                                  (ENV["GOOGLE_APPLICATION_CREDENTIALS"] = old)
+            end
+        end
+    end
+
     # ── SEC-002: error message sanitization ─────────────────
     @testset "_parse_google_error_body: Google API envelope" begin
         body = """{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}"""
