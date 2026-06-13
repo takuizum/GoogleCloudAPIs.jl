@@ -348,7 +348,7 @@ end
             container_name = "bq-emulator-test-$(rand(UInt32))"
             try
                 @info "Starting BigQuery emulator..."
-                run(`docker run -d --platform linux/amd64 --name $container_name -p 9050:9050 ghcr.io/goccy/bigquery-emulator:latest bigquery-emulator --project=test-project --port=9050`)
+                run(`docker run -d --platform linux/amd64 --name $container_name -p 9050:9050 ghcr.io/goccy/bigquery-emulator:0.4.3 bigquery-emulator --project=test-project --port=9050`)
                 connected = false
                 for _ in 1:15
                     try

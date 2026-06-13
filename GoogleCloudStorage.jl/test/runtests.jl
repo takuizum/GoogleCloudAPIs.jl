@@ -296,6 +296,9 @@ end
         end
     end
 
+    # ── ADC loading (mock credentials file) ──────────────────
+    include("adc_test.jl")
+
     # ── Emulator integration tests ───────────────────────────
     started_container = nothing
     if !haskey(ENV, "STORAGE_EMULATOR_HOST")
@@ -307,7 +310,7 @@ end
             container_name = "gcs-emulator-test-$(rand(UInt32))"
             try
                 @info "Starting fake-gcs-server..."
-                run(`docker run -d --name $container_name -p 4443:4443 fsouza/fake-gcs-server:latest -scheme http`)
+                run(`docker run -d --name $container_name -p 4443:4443 fsouza/fake-gcs-server:1.47.7 -scheme http`)
                 connected = false
                 for _ in 1:15
                     try

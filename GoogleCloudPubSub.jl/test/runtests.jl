@@ -235,7 +235,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
             container_name = "pubsub-emulator-test-$(rand(UInt32))"
             try
                 @info "Starting PubSub Emulator..."
-                run(`docker run -d --name $container_name -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`)
+                run(`docker run -d --name $container_name -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:477.0.0-emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`)
                 connected = false
                 for _ in 1:10
                     try

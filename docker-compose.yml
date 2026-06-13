@@ -1,19 +1,19 @@
 
 services:
   gcs-emulator:
-    image: fsouza/fake-gcs-server:latest
+    image: fsouza/fake-gcs-server:1.47.7
     ports:
       - "4443:4443"
     command: -scheme http
 
   pubsub-emulator:
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:477.0.0-emulators
     ports:
       - "8085:8085"
     command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
 
   bigquery-emulator:
-    image: ghcr.io/goccy/bigquery-emulator:latest
+    image: ghcr.io/goccy/bigquery-emulator:0.4.3
     platform: linux/amd64
     ports:
       - "9050:9050"
