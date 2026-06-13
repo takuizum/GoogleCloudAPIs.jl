@@ -1,9 +1,15 @@
 """
-    query(client, sql; format=:json, timeout_ms=10_000, max_results=nothing,
-          poll_timeout=600.0) -> Vector{NamedTuple} | Arrow.Table
+    query(client, sql; params=nothing, format=:json, timeout_ms=10_000,
+          max_results=nothing, poll_timeout=600.0) -> Vector{NamedTuple} | Arrow.Table
 
 Execute a SQL query against BigQuery and return the full result set.
 
+* `params`: query parameters — pass a `Dict` for named parameters
+  (referenced as `@name` in SQL) or a `Vector` for positional ones
+  (referenced as `?`). Prefer parameters over string interpolation to
+  avoid SQL injection. `DateTime` parameters are sent as `TIMESTAMP` and
+  **interpreted as UTC**; pass DATETIME values as `String`s instead.
+  See [`_bq_param_type`](@ref) for the type mapping.
 * `format=:json` (default): parse rows from the REST API response into
   `Vector{NamedTuple}`. Works for all result sizes supported by `jobs.query`.
 * `format=:arrow`: same as `:json` but converts the result to `Arrow.Table`
@@ -11,6 +17,12 @@ Execute a SQL query against BigQuery and return the full result set.
 * `timeout_ms`: server-side wait passed to `jobs.query` (`timeoutMs`).
 * `poll_timeout`: client-side deadline in seconds for the whole job to
   complete. Throws `GoogleApiCore.TimeoutError` when exceeded.
+
+```julia
+query(bq, "SELECT name FROM t WHERE age > @min_age AND city = @city";
+      params=Dict("min_age" => 20, "city" => "Tokyo"))
+query(bq, "SELECT ? + ?"; params=[1, 2])
+```
 
 Column values are converted to Julia types — `INT64 → Int64`,
 `FLOAT64 → Float64`, `BOOL → Bool`, `TIMESTAMP/DATETIME → Dates.DateTime`
@@ -28,6 +40,7 @@ the `GoogleBigQueryStorage.jl` roadmap item.
 Pages are followed automatically via `jobs.getQueryResults`.
 """
 function query(client::BQClient, sql::AbstractString;
+               params::Union{AbstractDict, AbstractVector, Nothing}=nothing,
                format::Symbol=:json,
                timeout_ms::Int=10_000,
                max_results::Union{Int, Nothing}=nothing,
@@ -42,6 +55,11 @@ function query(client::BQClient, sql::AbstractString;
     )
     if max_results !== nothing
         body["maxResults"] = max_results
+    end
+    if params !== nothing
+        mode, qp = _build_query_parameters(params)
+        body["parameterMode"]   = mode
+        body["queryParameters"] = qp
     end
     encoded = JSON.json(body)
 

@@ -223,6 +223,106 @@ end
         end
     end
 
+    # ── query parameters: serialization helpers ──────────────
+    @testset "_bq_param_type / _bq_param_value mapping" begin
+        pt = BigQuery._bq_param_type
+        pv = BigQuery._bq_param_value
+
+        @test pt("hi")  == Dict("type" => "STRING")
+        @test pt(true)  == Dict("type" => "BOOL")     # Bool before Integer
+        @test pt(42)    == Dict("type" => "INT64")
+        @test pt(Int32(7)) == Dict("type" => "INT64")
+        @test pt(3.14)  == Dict("type" => "FLOAT64")
+        @test pt(Date(2026, 6, 13)) == Dict("type" => "DATE")
+        @test pt(DateTime(2026, 6, 13, 1, 2, 3)) == Dict("type" => "TIMESTAMP")
+        @test pt(Time(1, 2, 3)) == Dict("type" => "TIME")
+        @test pt(UInt8[0x01]) == Dict("type" => "BYTES")  # BYTES before ARRAY
+        @test pt([1, 2]) ==
+              Dict("type" => "ARRAY", "arrayType" => Dict("type" => "INT64"))
+        @test pt(String[]) ==
+              Dict("type" => "ARRAY", "arrayType" => Dict("type" => "STRING"))
+        @test pt(Int[]) ==
+              Dict("type" => "ARRAY", "arrayType" => Dict("type" => "INT64"))
+
+        @test pv(true)["value"]  == "true"
+        @test pv(false)["value"] == "false"
+        @test pv(42)["value"]    == "42"
+        @test pv("x")["value"]   == "x"
+        @test pv(Date(2026, 6, 13))["value"] == "2026-06-13"
+        @test pv(DateTime(2026, 6, 13, 1, 2, 3))["value"] ==
+              "2026-06-13 01:02:03.000+00"   # UTC 前提
+        @test pv(Time(1, 2, 3))["value"] == "01:02:03.000"
+        @test pv(UInt8[0x68, 0x69])["value"] == Base64.base64encode("hi")
+        @test pv([1, 2]) == Dict("arrayValues" => [
+            Dict("value" => "1"), Dict("value" => "2")])
+
+        # エラー系
+        @test_throws ArgumentError pt(missing)
+        @test_throws ArgumentError pt(nothing)
+        @test_throws ArgumentError pt(Dict("a" => 1))          # STRUCT 未対応
+        @test_throws ArgumentError pt((a = 1,))                # 同上
+        @test_throws ArgumentError pt(Any[])                   # 空 Vector{Any}
+        @test_throws ArgumentError BigQuery._build_query_parameters(
+            ["x" => 1])                                        # Pair の Vector
+    end
+
+    @testset "_build_query_parameters modes" begin
+        mode, qp = BigQuery._build_query_parameters(Dict("x" => 1))
+        @test mode == "NAMED"
+        @test qp[1]["name"] == "x"
+        @test qp[1]["parameterType"]  == Dict("type" => "INT64")
+        @test qp[1]["parameterValue"] == Dict("value" => "1")
+
+        mode, qp = BigQuery._build_query_parameters([1, "a"])
+        @test mode == "POSITIONAL"
+        @test length(qp) == 2
+        @test !haskey(qp[1], "name")
+
+        # Symbol キーの Dict も使える
+        mode, qp = BigQuery._build_query_parameters(Dict(:y => true))
+        @test mode == "NAMED"
+        @test qp[1]["name"] == "y"
+    end
+
+    @testset "query sends queryParameters (mock server, body capture)" begin
+        port = free_port()
+        captured = Ref{String}("")
+        body = bq_integer_response(; x_values=Int64[1])
+        server = HTTP.serve!(port) do req
+            captured[] = String(copy(req.body))
+            HTTP.Response(200, ["Content-Type" => "application/json"], body)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+
+            # NAMED
+            query(client, "SELECT @x AS x"; params=Dict("x" => 41))
+            sent = JSON.parse(captured[])
+            @test sent["parameterMode"] == "NAMED"
+            @test sent["queryParameters"] == [Dict(
+                "name"           => "x",
+                "parameterType"  => Dict("type" => "INT64"),
+                "parameterValue" => Dict("value" => "41"),
+            )]
+
+            # POSITIONAL（異種混在は Any[] で）
+            query(client, "SELECT ? + ?"; params=Any[1, 2.5])
+            sent = JSON.parse(captured[])
+            @test sent["parameterMode"] == "POSITIONAL"
+            @test sent["queryParameters"][1]["parameterType"]["type"] == "INT64"
+            @test sent["queryParameters"][2]["parameterType"]["type"] == "FLOAT64"
+            @test !haskey(sent["queryParameters"][1], "name")
+
+            # params なしのときはキー自体が無い
+            query(client, "SELECT 1")
+            sent = JSON.parse(captured[])
+            @test !haskey(sent, "parameterMode")
+            @test !haskey(sent, "queryParameters")
+        finally
+            close(server)
+        end
+    end
+
     # ── _rows_to_arrow: client-side JSON→Arrow.Table conversion ─
     @testset "_rows_to_arrow round-trip" begin
         rows = [(x = Int64(1), y = "a"), (x = Int64(2), y = "b"), (x = Int64(3), y = "c")]

@@ -16,6 +16,7 @@ export Table, TableFieldSchema, list_tables, get_table, create_table, delete_tab
 
 include("results.jl")
 include("client.jl")
+include("params.jl")
 include("jobs.jl")
 include("datasets.jl")
 include("tables.jl")
