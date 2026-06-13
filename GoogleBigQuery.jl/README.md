@@ -1,4 +1,4 @@
-# BigQuery.jl
+# GoogleBigQuery.jl
 
 
 [![CI](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/takuizum/GoogleCloudAPIs.jl/actions/workflows/CI.yml) [![codecov](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/takuizum/GoogleCloudAPIs.jl) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
@@ -16,7 +16,7 @@ BigQuery REST API client for Julia. Part of the [GoogleCloudAPIs.jl](../README.m
 ## Quick start
 
 ```julia
-using BigQuery
+using GoogleBigQuery
 
 client = BQClient("your-project-id")             # uses ADC
 # client = BQClient("your-project-id"; location="asia-northeast1")

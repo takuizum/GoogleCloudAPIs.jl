@@ -1,4 +1,4 @@
-name = "BigQuery"
+name = "GoogleBigQuery"
 uuid = "445db125-8b00-41a4-910c-5a1c36509841"
 authors = ["Takumi Itamiya"]
 version = "0.1.0"

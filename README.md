@@ -11,7 +11,7 @@ Julia client libraries for Google Cloud Platform.
 | Package | Purpose |
 |---------|---------|
 | [GoogleAuth.jl](GoogleAuth.jl) | Authentication — ADC, service account, OAuth 2.0 |
-| [BigQuery.jl](BigQuery.jl) | BigQuery — query, datasets, tables |
+| [GoogleBigQuery.jl](GoogleBigQuery.jl) | BigQuery — query, datasets, tables |
 | [GoogleCloudStorage.jl](GoogleCloudStorage.jl) | Cloud Storage — buckets and objects |
 | [GoogleCloudPubSub.jl](GoogleCloudPubSub.jl) | Pub/Sub — topics, subscriptions, publish/pull |
 
@@ -21,7 +21,7 @@ Each package can be installed independently. `GoogleApiCore` is a shared depende
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="BigQuery.jl")
+Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="GoogleBigQuery.jl")
 Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="GoogleCloudStorage.jl")
 Pkg.add(url="https://github.com/takuizum/GoogleCloudAPIs.jl", subdir="GoogleCloudPubSub.jl")
 ```
@@ -41,7 +41,7 @@ Service account key files and browser-based OAuth are also supported — see [Au
 **BigQuery**
 
 ```julia
-using BigQuery
+using GoogleBigQuery
 
 bq   = BQClient("my-project")
 rows = query(bq, "SELECT 1 AS n, 'hello' AS s")

@@ -3,7 +3,7 @@ Documenter        = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 GoogleAuth        = "c7034c12-f568-48fa-9679-9976dce9d37e"
 GoogleApiCore     = "5b46693f-3346-4d48-b018-2afc076565e2"
 GoogleCloudStorage = "7a95fb5f-a5a2-4f82-9cda-bd4cc307a60f"
-BigQuery          = "445db125-8b00-41a4-910c-5a1c36509841"
+GoogleBigQuery    = "445db125-8b00-41a4-910c-5a1c36509841"
 GoogleCloudPubSub = "1a5f873f-a1d6-4e7b-91c4-4c6e3977c38e"
 
 [compat]

@@ -73,7 +73,7 @@ GoogleのAPI設計指針 (API Improvement Proposals) に厳格に従ってくだ
 
 * `GoogleApiCore.jl`: 共通のHTTP/gRPC通信ロジック、リトライ、ページネーション。
 * `GoogleAuth.jl`: ADC探索、Workload Identity、Security Token Service連携。
-* `GoogleCloudStorage.jl`, `BigQuery.jl`, `PubSub.jl`: サービス別パッケージ。
+* `GoogleCloudStorage.jl`, `GoogleBigQuery.jl`, `PubSub.jl`: サービス別パッケージ。
 
 ## 2. Authentication Logic (ADC Strategy)
 

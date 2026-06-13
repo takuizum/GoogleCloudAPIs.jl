@@ -12,7 +12,7 @@ GoogleCloudAPIs.jl/
 │   └── test/
 ├── GoogleApiCore.jl/       # Shared HTTP/pagination infrastructure
 ├── GoogleCloudStorage.jl/  # GCS sub-package
-├── BigQuery.jl/            # BigQuery sub-package
+├── GoogleBigQuery.jl/            # BigQuery sub-package
 ├── GoogleCloudPubSub.jl/   # Pub/Sub sub-package
 ├── docs/                   # Documenter.jl source
 ├── .github/workflows/      # CI (CI.yml, Docs.yml, TagBot.yml, CompatHelper.yml)
@@ -33,7 +33,7 @@ Pkg.develop([
     PackageSpec(path="GoogleAuth.jl"),
     PackageSpec(path="GoogleApiCore.jl"),
     PackageSpec(path="GoogleCloudStorage.jl"),
-    PackageSpec(path="BigQuery.jl"),
+    PackageSpec(path="GoogleBigQuery.jl"),
     PackageSpec(path="GoogleCloudPubSub.jl"),
 ])
 Pkg.instantiate()

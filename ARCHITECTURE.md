@@ -60,8 +60,8 @@ GoogleCloudAPIs.jl/                          ← リポジトリルート（パ�
 ├── GoogleCloudStorage.jl/                   ← GCS JSON API クライアント
 │   └── src/{GoogleCloudStorage.jl, client.jl, buckets.jl, objects.jl}
 │
-├── BigQuery.jl/                             ← BigQuery REST API クライアント
-│   └── src/{BigQuery.jl, client.jl, jobs.jl, datasets.jl, tables.jl, results.jl}
+├── GoogleBigQuery.jl/                             ← BigQuery REST API クライアント
+│   └── src/{GoogleBigQuery.jl, client.jl, jobs.jl, datasets.jl, tables.jl, results.jl}
 │
 ├── GoogleCloudPubSub.jl/                    ← Pub/Sub REST API クライアント
 │   └── src/{GoogleCloudPubSub.jl, topics.jl, subscriptions.jl, messages.jl}
@@ -82,7 +82,7 @@ GoogleCloudAPIs.jl/                          ← リポジトリルート（パ�
 
 - ルートの `Project.toml` は**パッケージではなく開発用環境**。`name` フィールドがない（`[deps]` のみ）。
 - 各サブパッケージは**独立した Julia パッケージ**。それぞれ独自の `Project.toml` / UUID / バージョンを持つ。
-- ユーザーは `Pkg.add(url=...; subdir="BigQuery.jl")` のように**個別にインストール**できる。
+- ユーザーは `Pkg.add(url=...; subdir="GoogleBigQuery.jl")` のように**個別にインストール**できる。
 - `GoogleApiCore` は `GoogleAuth` および全サービスパッケージから依存される最下層。`GoogleAuth` も同様に全サービスから依存される。
 
 ---
@@ -91,7 +91,7 @@ GoogleCloudAPIs.jl/                          ← リポジトリルート（パ�
 
 ```mermaid
 graph TD
-    BQ[BigQuery.jl]
+    BQ[GoogleBigQuery.jl]
     GCS[GoogleCloudStorage.jl]
     PS[GoogleCloudPubSub.jl]
 
@@ -160,7 +160,7 @@ flowchart TB
         U[query / publish / upload_object など]
     end
 
-    subgraph Service["サービス層: BigQuery / GoogleCloudStorage / GoogleCloudPubSub"]
+    subgraph Service["サービス層: GoogleBigQuery / GoogleCloudStorage / GoogleCloudPubSub"]
         direction LR
         Client["XXXClient"] --> Method["メソッド: 例) query, upload_object"]
         Method --> Parser["JSON ↔ Julia struct 変換"]
@@ -507,7 +507,7 @@ REPL に誤って表示されてもログ/コピペで漏れない保証です�
 
 ## 7. サービスクライアント共通パターン
 
-`GoogleCloudStorage` / `BigQuery` / `GoogleCloudPubSub` は**同一のパターン**で実装されています。
+`GoogleCloudStorage` / `GoogleBigQuery` / `GoogleCloudPubSub` は**同一のパターン**で実装されています。
 
 ### 7.1 共通の構造体フィールド
 
@@ -621,7 +621,7 @@ body = data isa IO ? read(data) :
 ```mermaid
 sequenceDiagram
     participant U as ユーザー
-    participant Q as BigQuery.query
+    participant Q as GoogleBigQuery.query
     participant API as BigQuery REST
     participant Cnv as _rows_to_arrow
 
@@ -738,13 +738,13 @@ publish(client, topic_id, ::AbstractString; attrs) -> String             # 文�
 
 ## 11. リクエストライフサイクル（シーケンス図）
 
-「ユーザーが `BigQuery.query(...)` を呼んだとき、何が起きるか」を**全レイヤを跨いだシーケンス**で示します。
+「ユーザーが `GoogleBigQuery.query(...)` を呼んだとき、何が起きるか」を**全レイヤを跨いだシーケンス**で示します。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant U as ユーザー
-    participant BQ as BigQuery.query
+    participant BQ as GoogleBigQuery.query
     participant REQ as _bq_request
     participant SIG as _make_signer<br/>(closure)
     participant CC as CachedCredentials
@@ -825,7 +825,7 @@ graph LR
 
     E1 --> CGCS[GoogleCloudStorage.Client<br/>is_emulator=true<br/>creds=nothing]
     E2 --> CPS[GoogleCloudPubSub.PubSubClient<br/>is_emulator=true]
-    E3 --> CBQ[BigQuery.BQClient<br/>is_emulator=true]
+    E3 --> CBQ[GoogleBigQuery.BQClient<br/>is_emulator=true]
 ```
 
 CI ジョブも同じ環境変数を export してエミュレータをジョブレベルで起動し（`CI.yml`）、各サブパッケージのテストはエミュレータに対して統合テストを実行します。
@@ -912,7 +912,7 @@ flowchart LR
 1. **フェーズ1** ✅ `GoogleAuth.jl` の ADC とメタデータサーバ対応
 2. **フェーズ2** ✅ `GoogleApiCore.jl` の AIP-158 ページネーション + 指数バックオフ
 3. **フェーズ3** ✅ `GoogleCloudStorage.jl` プロトタイプ
-4. **フェーズ4** ⚠️ `BigQuery.jl` の Arrow 高速読込（**現状は client-side 変換のみ。本来は Storage Read API gRPC**）
+4. **フェーズ4** ⚠️ `GoogleBigQuery.jl` の Arrow 高速読込（**現状は client-side 変換のみ。本来は Storage Read API gRPC**）
 
 ---
 
@@ -948,7 +948,7 @@ flowchart TB
     Root --> GCS["GoogleCloudStorage.jl/"]
     GCS --> G1["src/<br/>{client, buckets, objects}.jl"]
 
-    Root --> BQ["BigQuery.jl/"]
+    Root --> BQ["GoogleBigQuery.jl/"]
     BQ --> B1["src/<br/>{client, jobs, results,<br/>datasets, tables}.jl"]
 
     Root --> PS["GoogleCloudPubSub.jl/"]

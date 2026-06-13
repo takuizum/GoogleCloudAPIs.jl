@@ -1,5 +1,5 @@
 using Test
-using BigQuery
+using GoogleBigQuery
 using Arrow
 using Base64
 using Dates
@@ -52,15 +52,15 @@ function bq_json_response(; rows=[[1, "a"], [2, "b"]],
 end
 
 # ────────────────────────────────────────────────────────────
-@testset "BigQuery.jl" begin
+@testset "GoogleBigQuery.jl" begin
 
     @testset "Aqua" begin
-        Aqua.test_all(BigQuery; ambiguities=false, persistent_tasks=false)
+        Aqua.test_all(GoogleBigQuery; ambiguities=false, persistent_tasks=false)
     end
 
     # ── _coerce_value: type conversions ──────────────────────
     @testset "_coerce_value type coercions" begin
-        cv = BigQuery._coerce_value
+        cv = GoogleBigQuery._coerce_value
         @test cv("42",    "INTEGER") === Int64(42)
         @test cv("99",    "INT64")   === Int64(99)
         @test cv("3.14",  "FLOAT")   ≈   3.14
@@ -73,7 +73,7 @@ end
     end
 
     @testset "_coerce_value temporal types" begin
-        cv = BigQuery._coerce_value
+        cv = GoogleBigQuery._coerce_value
 
         # TIMESTAMP: epoch-seconds decimal string, scientific notation included
         @test cv("1.7297836E9", "TIMESTAMP") == Dates.unix2datetime(1.7297836e9)
@@ -98,8 +98,8 @@ end
     end
 
     @testset "_coerce_value bytes / numeric / record / repeated" begin
-        cv = BigQuery._coerce_value
-        BQField = BigQuery.BQField
+        cv = GoogleBigQuery._coerce_value
+        BQField = GoogleBigQuery.BQField
 
         # BYTES → base64 decode
         @test cv(Base64.base64encode("hello"), "BYTES") == Vector{UInt8}("hello")
@@ -139,15 +139,15 @@ end
                 Dict("name" => "city", "type" => "STRING"),
             ]),
         ]))
-        fields = BigQuery._parse_schema(page)
+        fields = GoogleBigQuery._parse_schema(page)
         @test length(fields) == 3
         @test fields[1].name == :id   && fields[1].mode == "REQUIRED"
         @test fields[2].mode == "REPEATED"
         @test fields[3].type == "RECORD"
         @test fields[3].fields[1].name == :city
-        @test fields[1].fields == BigQuery.BQField[]
+        @test fields[1].fields == GoogleBigQuery.BQField[]
         @test fields[3].mode == "NULLABLE"   # mode 省略時のデフォルト
-        @test BigQuery._parse_schema(Dict()) == BigQuery.BQField[]
+        @test GoogleBigQuery._parse_schema(Dict()) == GoogleBigQuery.BQField[]
     end
 
     @testset "query with typed columns end-to-end (mock server)" begin
@@ -225,8 +225,8 @@ end
 
     # ── query parameters: serialization helpers ──────────────
     @testset "_bq_param_type / _bq_param_value mapping" begin
-        pt = BigQuery._bq_param_type
-        pv = BigQuery._bq_param_value
+        pt = GoogleBigQuery._bq_param_type
+        pv = GoogleBigQuery._bq_param_value
 
         @test pt("hi")  == Dict("type" => "STRING")
         @test pt(true)  == Dict("type" => "BOOL")     # Bool before Integer
@@ -262,24 +262,24 @@ end
         @test_throws ArgumentError pt(Dict("a" => 1))          # STRUCT 未対応
         @test_throws ArgumentError pt((a = 1,))                # 同上
         @test_throws ArgumentError pt(Any[])                   # 空 Vector{Any}
-        @test_throws ArgumentError BigQuery._build_query_parameters(
+        @test_throws ArgumentError GoogleBigQuery._build_query_parameters(
             ["x" => 1])                                        # Pair の Vector
     end
 
     @testset "_build_query_parameters modes" begin
-        mode, qp = BigQuery._build_query_parameters(Dict("x" => 1))
+        mode, qp = GoogleBigQuery._build_query_parameters(Dict("x" => 1))
         @test mode == "NAMED"
         @test qp[1]["name"] == "x"
         @test qp[1]["parameterType"]  == Dict("type" => "INT64")
         @test qp[1]["parameterValue"] == Dict("value" => "1")
 
-        mode, qp = BigQuery._build_query_parameters([1, "a"])
+        mode, qp = GoogleBigQuery._build_query_parameters([1, "a"])
         @test mode == "POSITIONAL"
         @test length(qp) == 2
         @test !haskey(qp[1], "name")
 
         # Symbol キーの Dict も使える
-        mode, qp = BigQuery._build_query_parameters(Dict(:y => true))
+        mode, qp = GoogleBigQuery._build_query_parameters(Dict(:y => true))
         @test mode == "NAMED"
         @test qp[1]["name"] == "y"
     end
@@ -326,7 +326,7 @@ end
     # ── _rows_to_arrow: client-side JSON→Arrow.Table conversion ─
     @testset "_rows_to_arrow round-trip" begin
         rows = [(x = Int64(1), y = "a"), (x = Int64(2), y = "b"), (x = Int64(3), y = "c")]
-        tbl = BigQuery._rows_to_arrow(rows)
+        tbl = GoogleBigQuery._rows_to_arrow(rows)
         @test tbl isa Arrow.Table
         @test collect(tbl.x) == [1, 2, 3]
         @test collect(tbl.y) == ["a", "b", "c"]

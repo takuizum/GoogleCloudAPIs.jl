@@ -36,14 +36,14 @@ jobs:
               PackageSpec(path="GoogleAuth.jl"),
               PackageSpec(path="GoogleApiCore.jl"),
               PackageSpec(path="GoogleCloudStorage.jl"),
-              PackageSpec(path="BigQuery.jl"),
+              PackageSpec(path="GoogleBigQuery.jl"),
               PackageSpec(path="GoogleCloudPubSub.jl"),
             ])
             Pkg.add("Aqua")
             Pkg.instantiate()
 
             using Aqua
-            using GoogleAuth, GoogleApiCore, GoogleCloudStorage, BigQuery, GoogleCloudPubSub
+            using GoogleAuth, GoogleApiCore, GoogleCloudStorage, GoogleBigQuery, GoogleCloudPubSub
 
             @info "Testing GoogleAuth..."
             Aqua.test_all(GoogleAuth; ambiguities=false, persistent_tasks=false)
@@ -51,8 +51,8 @@ jobs:
             Aqua.test_all(GoogleApiCore; ambiguities=false, persistent_tasks=false)
             @info "Testing GoogleCloudStorage..."
             Aqua.test_all(GoogleCloudStorage; ambiguities=false, persistent_tasks=false)
-            @info "Testing BigQuery..."
-            Aqua.test_all(BigQuery; ambiguities=false, persistent_tasks=false)
+            @info "Testing GoogleBigQuery..."
+            Aqua.test_all(GoogleBigQuery; ambiguities=false, persistent_tasks=false)
             @info "Testing GoogleCloudPubSub..."
             Aqua.test_all(GoogleCloudPubSub; ambiguities=false, persistent_tasks=false)
           '
@@ -72,7 +72,7 @@ jobs:
           - GoogleAuth
           - GoogleApiCore
           - GoogleCloudStorage
-          - BigQuery
+          - GoogleBigQuery
           - GoogleCloudPubSub
 
     env:
@@ -96,7 +96,7 @@ jobs:
       # エミュレータを起動して接続可能になるまで待機
       # ──────────────────────────────────────────────
       - name: Start GCP Emulators
-        if: matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub'
+        if: matrix.package == 'GoogleCloudStorage' || matrix.package == 'GoogleBigQuery' || matrix.package == 'GoogleCloudPubSub'
         run: |
           docker compose up -d
           echo "Waiting for emulators to become ready..."
@@ -152,7 +152,7 @@ jobs:
               PackageSpec(path="GoogleAuth.jl"),
               PackageSpec(path="GoogleApiCore.jl"),
               PackageSpec(path="GoogleCloudStorage.jl"),
-              PackageSpec(path="BigQuery.jl"),
+              PackageSpec(path="GoogleBigQuery.jl"),
               PackageSpec(path="GoogleCloudPubSub.jl"),
             ])
             Pkg.instantiate()
@@ -167,9 +167,9 @@ jobs:
 
       # 失敗時のデバッグ用ログ出力
       - name: Dump Emulator Logs
-        if: failure() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub')
+        if: failure() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'GoogleBigQuery' || matrix.package == 'GoogleCloudPubSub')
         run: docker compose logs --tail=200
 
       - name: Stop Emulators
-        if: always() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'BigQuery' || matrix.package == 'GoogleCloudPubSub')
+        if: always() && (matrix.package == 'GoogleCloudStorage' || matrix.package == 'GoogleBigQuery' || matrix.package == 'GoogleCloudPubSub')
         run: docker compose down --volumes --remove-orphans
