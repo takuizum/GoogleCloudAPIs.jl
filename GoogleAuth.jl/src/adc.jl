@@ -31,7 +31,7 @@ function load_credentials_from_file(path::String)
     elseif haskey(json_data, "type") && json_data["type"] == "authorized_user"
         return UserCredentials(json_data)
     elseif haskey(json_data, "type") && json_data["type"] == "external_account"
-        error("External account (Workload Identity Federation) not yet implemented.")
+        return ExternalAccountCredentials(json_data)
     else
         error("Unknown credential type in file: $path")
     end

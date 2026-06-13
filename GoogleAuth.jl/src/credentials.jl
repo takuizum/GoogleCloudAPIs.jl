@@ -262,23 +262,28 @@ with_scopes(c::ImpersonatedCredentials, scopes::AbstractVector{<:AbstractString}
     ImpersonatedCredentials(c.source, c.target_principal, scopes;
                             lifetime=c.lifetime, _iam_base_url=c._iam_base_url)
 
-function get_token(creds::ImpersonatedCredentials)
-    src_token = get_token(creds.source)
+"""
+    _generate_access_token(url, bearer, scopes, lifetime) -> Token
 
-    url = "$(creds._iam_base_url)/$(creds.target_principal):generateAccessToken"
+Call an IAM Credentials `generateAccessToken` endpoint with a bearer token and
+convert the RFC3339 `expireTime` in the response into a seconds-remaining
+`Token`. Shared by `ImpersonatedCredentials` and `ExternalAccountCredentials`.
+"""
+function _generate_access_token(url::String, bearer::String,
+                                scopes::Vector{String}, lifetime::Int;
+                                error_prefix::String="Failed to generate impersonated access token")
     headers = [
-        "Authorization"  => "Bearer $(src_token.access_token)",
+        "Authorization"  => "Bearer $(bearer)",
         "Content-Type"   => "application/json",
     ]
     body = JSON.json(Dict(
-        "scope"    => creds.scopes,
-        "lifetime" => "$(creds.lifetime)s",
+        "scope"    => scopes,
+        "lifetime" => "$(lifetime)s",
     ))
 
     resp = HTTP.post(url, headers, body; status_exception=false)
     if resp.status != 200
-        error("Failed to impersonate $(creds.target_principal): " *
-              _parse_google_error_body(resp.body, resp.status))
+        error(error_prefix * ": " * _parse_google_error_body(resp.body, resp.status))
     end
 
     j = JSON.parse(IOBuffer(resp.body))
@@ -289,6 +294,14 @@ function get_token(creds::ImpersonatedCredentials)
     expires_in = max(0, round(Int, Dates.datetime2unix(expire_dt) - time()))
 
     return Token(String(j["accessToken"]), expires_in, "Bearer")
+end
+
+function get_token(creds::ImpersonatedCredentials)
+    src_token = get_token(creds.source)
+    url = "$(creds._iam_base_url)/$(creds.target_principal):generateAccessToken"
+    return _generate_access_token(url, src_token.access_token,
+                                  creds.scopes, creds.lifetime;
+                                  error_prefix="Failed to impersonate $(creds.target_principal)")
 end
 
 """
