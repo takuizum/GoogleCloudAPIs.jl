@@ -9,7 +9,7 @@ Execute a SQL query against BigQuery and return the full result set.
   (referenced as `?`). Prefer parameters over string interpolation to
   avoid SQL injection. `DateTime` parameters are sent as `TIMESTAMP` and
   **interpreted as UTC**; pass DATETIME values as `String`s instead.
-  See [`_bq_param_type`](@ref) for the type mapping.
+  See the `_bq_param_type` docstring for the type mapping.
 * `format=:json` (default): parse rows from the REST API response into
   `Vector{NamedTuple}`. Works for all result sizes supported by `jobs.query`.
 * `format=:arrow`: same as `:json` but converts the result to `Arrow.Table`
