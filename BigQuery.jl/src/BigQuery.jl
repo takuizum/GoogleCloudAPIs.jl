@@ -2,6 +2,7 @@ module BigQuery
 
 using Arrow
 using Base64
+using Dates
 using HTTP
 using JSON
 using URIs

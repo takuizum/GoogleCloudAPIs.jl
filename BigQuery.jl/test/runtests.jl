@@ -2,6 +2,7 @@ using Test
 using BigQuery
 using Arrow
 using Base64
+using Dates
 using HTTP
 using JSON
 using Aqua
@@ -69,6 +70,157 @@ end
         @test cv("hello", "STRING")  == "hello"
         @test cv(nothing, "INTEGER") === missing
         @test cv(nothing, "STRING")  === missing
+    end
+
+    @testset "_coerce_value temporal types" begin
+        cv = BigQuery._coerce_value
+
+        # TIMESTAMP: epoch-seconds decimal string, scientific notation included
+        @test cv("1.7297836E9", "TIMESTAMP") == Dates.unix2datetime(1.7297836e9)
+        ts = cv("1729783600.123456", "TIMESTAMP")
+        @test ts isa DateTime
+        @test Dates.millisecond(ts) == 123       # µs は切り捨て
+
+        @test cv("2026-06-13", "DATE") == Date(2026, 6, 13)
+
+        @test cv("2026-06-13T12:34:56", "DATETIME") ==
+              DateTime(2026, 6, 13, 12, 34, 56)
+        @test cv("2026-06-13T12:34:56.789123", "DATETIME") ==
+              DateTime(2026, 6, 13, 12, 34, 56, 789)   # µs は切り捨て
+
+        t = cv("12:34:56.789123", "TIME")
+        @test t == Time(12, 34, 56) + Millisecond(789) + Microsecond(123)
+        @test cv("01:02:03", "TIME") == Time(1, 2, 3)
+
+        # null → missing
+        @test cv(nothing, "TIMESTAMP") === missing
+        @test cv(nothing, "DATE") === missing
+    end
+
+    @testset "_coerce_value bytes / numeric / record / repeated" begin
+        cv = BigQuery._coerce_value
+        BQField = BigQuery.BQField
+
+        # BYTES → base64 decode
+        @test cv(Base64.base64encode("hello"), "BYTES") == Vector{UInt8}("hello")
+
+        # NUMERIC/BIGNUMERIC は精度保持のため String のまま（回帰テスト）
+        @test cv("12345678901234567890.123456789", "NUMERIC") ==
+              "12345678901234567890.123456789"
+        @test cv("1.5", "BIGNUMERIC") == "1.5"
+
+        # RECORD → ネスト NamedTuple
+        rec_field = BQField(:r, "RECORD"; fields=[
+            BQField(:a, "INT64"), BQField(:b, "STRING"),
+        ])
+        raw_rec = Dict("f" => [Dict("v" => "42"), Dict("v" => "x")])
+        @test cv(raw_rec, rec_field) == (a = 42, b = "x")
+
+        # REPEATED INT64 → Vector{Int64}
+        rep_field = BQField(:xs, "INT64"; mode="REPEATED")
+        @test cv([Dict("v" => "1"), Dict("v" => "2")], rep_field) == [1, 2]
+
+        # REPEATED RECORD → Vector{NamedTuple}
+        rep_rec = BQField(:rs, "RECORD"; mode="REPEATED",
+                          fields=[BQField(:a, "INT64")])
+        raw = [Dict("v" => Dict("f" => [Dict("v" => "7")])),
+               Dict("v" => Dict("f" => [Dict("v" => "8")]))]
+        @test cv(raw, rep_rec) == [(a = 7,), (a = 8,)]
+
+        # GEOGRAPHY などの未知型は String のまま
+        @test cv("POINT(1 2)", "GEOGRAPHY") == "POINT(1 2)"
+    end
+
+    @testset "_parse_schema: mode and nested fields" begin
+        page = Dict("schema" => Dict("fields" => [
+            Dict("name" => "id", "type" => "INT64", "mode" => "REQUIRED"),
+            Dict("name" => "tags", "type" => "STRING", "mode" => "REPEATED"),
+            Dict("name" => "addr", "type" => "RECORD", "fields" => [
+                Dict("name" => "city", "type" => "STRING"),
+            ]),
+        ]))
+        fields = BigQuery._parse_schema(page)
+        @test length(fields) == 3
+        @test fields[1].name == :id   && fields[1].mode == "REQUIRED"
+        @test fields[2].mode == "REPEATED"
+        @test fields[3].type == "RECORD"
+        @test fields[3].fields[1].name == :city
+        @test fields[1].fields == BigQuery.BQField[]
+        @test fields[3].mode == "NULLABLE"   # mode 省略時のデフォルト
+        @test BigQuery._parse_schema(Dict()) == BigQuery.BQField[]
+    end
+
+    @testset "query with typed columns end-to-end (mock server)" begin
+        port = free_port()
+        body = JSON.json(Dict(
+            "jobComplete" => true,
+            "jobReference" => Dict("projectId" => "proj", "jobId" => "job-typed"),
+            "schema" => Dict("fields" => [
+                Dict("name" => "ts",   "type" => "TIMESTAMP"),
+                Dict("name" => "d",    "type" => "DATE"),
+                Dict("name" => "blob", "type" => "BYTES"),
+                Dict("name" => "tags", "type" => "INT64", "mode" => "REPEATED"),
+                Dict("name" => "rec",  "type" => "RECORD", "fields" => [
+                    Dict("name" => "city", "type" => "STRING"),
+                ]),
+                Dict("name" => "maybe", "type" => "STRING"),
+            ]),
+            "rows" => [Dict("f" => [
+                Dict("v" => "1729783600.5"),
+                Dict("v" => "2026-06-13"),
+                Dict("v" => Base64.base64encode("bin")),
+                Dict("v" => [Dict("v" => "1"), Dict("v" => "2")]),
+                Dict("v" => Dict("f" => [Dict("v" => "Tokyo")])),
+                Dict("v" => nothing),
+            ])],
+        ))
+        server = HTTP.serve!(port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"], body)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+            rows = query(client, "SELECT * FROM t")
+            @test length(rows) == 1
+            r = rows[1]
+            @test r.ts == Dates.unix2datetime(1729783600.5)
+            @test r.d == Date(2026, 6, 13)
+            @test r.blob == Vector{UInt8}("bin")
+            @test r.tags == [1, 2]
+            @test r.rec == (city = "Tokyo",)
+            @test r.maybe === missing
+        finally
+            close(server)
+        end
+    end
+
+    @testset "format=:arrow with temporal and missing columns (smoke)" begin
+        port = free_port()
+        body = JSON.json(Dict(
+            "jobComplete" => true,
+            "jobReference" => Dict("projectId" => "proj", "jobId" => "job-arrow2"),
+            "schema" => Dict("fields" => [
+                Dict("name" => "ts", "type" => "TIMESTAMP"),
+                Dict("name" => "s",  "type" => "STRING"),
+            ]),
+            "rows" => [
+                Dict("f" => [Dict("v" => "1729783600"), Dict("v" => "a")]),
+                Dict("f" => [Dict("v" => "1729783601"), Dict("v" => nothing)]),
+            ],
+        ))
+        server = HTTP.serve!(port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"], body)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+            tbl = query(client, "SELECT ts, s FROM t"; format=:arrow)
+            @test tbl isa Arrow.Table
+            @test collect(tbl.ts) == [Dates.unix2datetime(1729783600),
+                                      Dates.unix2datetime(1729783601)]
+            @test collect(tbl.s)[1] == "a"
+            @test collect(tbl.s)[2] === missing
+        finally
+            close(server)
+        end
     end
 
     # ── _rows_to_arrow: client-side JSON→Arrow.Table conversion ─

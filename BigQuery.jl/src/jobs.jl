@@ -12,6 +12,15 @@ Execute a SQL query against BigQuery and return the full result set.
 * `poll_timeout`: client-side deadline in seconds for the whole job to
   complete. Throws `GoogleApiCore.TimeoutError` when exceeded.
 
+Column values are converted to Julia types — `INT64 → Int64`,
+`FLOAT64 → Float64`, `BOOL → Bool`, `TIMESTAMP/DATETIME → Dates.DateTime`
+(TIMESTAMP is UTC; both truncate to millisecond precision),
+`DATE → Dates.Date`, `TIME → Dates.Time`, `BYTES → Vector{UInt8}`,
+`RECORD/STRUCT →` nested `NamedTuple`, `REPEATED →` `Vector`. `NUMERIC` and
+`BIGNUMERIC` are kept as lossless `String`s (parse explicitly if you can
+tolerate `Float64` rounding); SQL `NULL` becomes `missing`. See
+[`_coerce_value`](@ref) for the full table.
+
 Note: true zero-copy Arrow streaming requires the BigQuery Storage Read API
 (gRPC). That is not implemented in v0.1. See the project issue tracker for
 the `GoogleBigQueryStorage.jl` roadmap item.
@@ -110,7 +119,14 @@ end
 
 function _parse_schema(page)
     schema = get(page, "schema", nothing)
-    schema === nothing && return Tuple{Symbol, String}[]
-    fields = schema["fields"]
-    return [(Symbol(f["name"]), String(f["type"])) for f in fields]
+    schema === nothing && return BQField[]
+    return _parse_schema_fields(schema["fields"])
+end
+
+function _parse_schema_fields(fields)
+    return [BQField(Symbol(f["name"]),
+                    uppercase(String(f["type"])),
+                    String(get(f, "mode", "NULLABLE")),
+                    haskey(f, "fields") ? _parse_schema_fields(f["fields"]) : BQField[])
+            for f in fields]
 end
