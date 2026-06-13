@@ -145,6 +145,57 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
         end
     end
 
+    # ── transient 5xx: pull/acknowledge retry, publish does not ──
+    @testset "pull retries on transient 500 (mock)" begin
+        port = free_port()
+        hits = Ref(0)
+        server = HTTP.serve!(port) do _req
+            hits[] += 1
+            status = hits[] == 1 ? 500 : 200
+            HTTP.Response(status, ["Content-Type" => "application/json"], "{}")
+        end
+        try
+            client = PubSubClient("p", nothing, "http://127.0.0.1:$port", true)
+            @test isempty(pull(client, "sub-retry"))
+            @test hits[] == 2   # 500 → リトライ → 200
+        finally
+            close(server)
+        end
+    end
+
+    @testset "acknowledge retries on transient 500 (mock)" begin
+        port = free_port()
+        hits = Ref(0)
+        server = HTTP.serve!(port) do _req
+            hits[] += 1
+            status = hits[] == 1 ? 503 : 200
+            HTTP.Response(status, ["Content-Type" => "application/json"], "{}")
+        end
+        try
+            client = PubSubClient("p", nothing, "http://127.0.0.1:$port", true)
+            @test acknowledge(client, "sub-retry", ["ACK-1"]) === nothing
+            @test hits[] == 2
+        finally
+            close(server)
+        end
+    end
+
+    @testset "publish does not retry on 500 (mock)" begin
+        port = free_port()
+        hits = Ref(0)
+        server = HTTP.serve!(port) do _req
+            hits[] += 1
+            HTTP.Response(500, ["Content-Type" => "application/json"], "{}")
+        end
+        try
+            client = PubSubClient("p", nothing, "http://127.0.0.1:$port", true)
+            @test_throws Exception publish(client, "topic-x", "data")
+            @test hits[] == 1   # 重複発行を避けるためリトライしない
+        finally
+            close(server)
+        end
+    end
+
     # ── Subscription CRUD (mock) ────────────────────────────
     @testset "create_subscription (mock)" begin
         port = free_port()

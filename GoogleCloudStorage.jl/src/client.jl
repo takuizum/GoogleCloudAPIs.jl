@@ -55,10 +55,12 @@ function _url(client::Client, path::AbstractString; query=nothing)
 end
 
 function _request(client::Client, method::String, path::AbstractString;
-                  query=nothing, body=nothing, content_type=nothing)
+                  query=nothing, body=nothing, content_type=nothing,
+                  idempotent::Bool=false)
     url = _url(client, path; query=query)
     headers = _headers(; content_type=content_type)
     payload = body === nothing ? "" : body
     return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
-                                               sign! = _make_signer(client))
+                                               sign! = _make_signer(client),
+                                               idempotent=idempotent)
 end

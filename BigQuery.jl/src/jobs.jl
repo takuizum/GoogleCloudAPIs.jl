@@ -1,5 +1,6 @@
 """
-    query(client, sql; format=:json, timeout_ms=10_000, max_results=nothing) -> Vector{NamedTuple} | Arrow.Table
+    query(client, sql; format=:json, timeout_ms=10_000, max_results=nothing,
+          poll_timeout=600.0) -> Vector{NamedTuple} | Arrow.Table
 
 Execute a SQL query against BigQuery and return the full result set.
 
@@ -7,6 +8,9 @@ Execute a SQL query against BigQuery and return the full result set.
   `Vector{NamedTuple}`. Works for all result sizes supported by `jobs.query`.
 * `format=:arrow`: same as `:json` but converts the result to `Arrow.Table`
   client-side. Provides a columnar interface without requiring gRPC.
+* `timeout_ms`: server-side wait passed to `jobs.query` (`timeoutMs`).
+* `poll_timeout`: client-side deadline in seconds for the whole job to
+  complete. Throws `GoogleApiCore.TimeoutError` when exceeded.
 
 Note: true zero-copy Arrow streaming requires the BigQuery Storage Read API
 (gRPC). That is not implemented in v0.1. See the project issue tracker for
@@ -17,7 +21,8 @@ Pages are followed automatically via `jobs.getQueryResults`.
 function query(client::BQClient, sql::AbstractString;
                format::Symbol=:json,
                timeout_ms::Int=10_000,
-               max_results::Union{Int, Nothing}=nothing)
+               max_results::Union{Int, Nothing}=nothing,
+               poll_timeout::Real=600.0)
     format in (:arrow, :json) || throw(ArgumentError("format must be :arrow or :json"))
 
     body = Dict{String, Any}(
@@ -39,7 +44,9 @@ function query(client::BQClient, sql::AbstractString;
     job_id = String(job_ref["jobId"])
     location = haskey(job_ref, "location") ? String(job_ref["location"]) : nothing
 
-    rows = _collect_json(client, initial, job_id, location, max_results)
+    deadline = time() + Float64(poll_timeout)
+    rows = _collect_json(client, initial, job_id, location, max_results, deadline,
+                         Float64(poll_timeout))
     format == :arrow ? _rows_to_arrow(rows) : rows
 end
 
@@ -63,15 +70,28 @@ function _get_results_page(client::BQClient, job_id::AbstractString,
 end
 
 
-function _collect_json(client::BQClient, first_page, job_id, location, max_results)
-    schema_fields = _parse_schema(first_page)
+function _collect_json(client::BQClient, first_page, job_id, location, max_results,
+                       deadline::Float64, poll_timeout::Float64)
     out = NamedTuple[]
     page = first_page
+    poll_interval = 0.2
+    # The schema is only present once the job is complete, so it must be
+    # parsed from the first *complete* page (the initial jobs.query response
+    # carries no schema when jobComplete=false).
+    schema_fields = nothing
     while true
         if !get(page, "jobComplete", true)
-            sleep(0.2)
+            if time() >= deadline
+                throw(GoogleApiCore.TimeoutError(
+                    "BigQuery job $(job_id) did not complete", poll_timeout))
+            end
+            sleep(poll_interval)
+            poll_interval = min(poll_interval * 1.5, 5.0)
             page = _get_results_page(client, job_id, nothing, location; max_results=max_results)
             continue
+        end
+        if schema_fields === nothing
+            schema_fields = _parse_schema(page)
         end
         rows = get(page, "rows", nothing)
         if rows !== nothing

@@ -6,6 +6,7 @@ using HTTP
 using JSON
 using Aqua
 import Sockets
+import GoogleApiCore
 import GoogleAuth
 import GoogleAuth: get_token  # extend for stub creds
 
@@ -133,6 +134,51 @@ end
             query(client, "SELECT 1"; format=:json)
             @test any(h -> h[1] == "Authorization" && h[2] == "Bearer mock-bq-token",
                       received_headers[])
+        finally
+            close(server)
+        end
+    end
+
+    # ── job polling: schema from first complete page ─────────
+    @testset "query polls until jobComplete (mock server)" begin
+        port = free_port()
+        hits = Ref(0)
+        incomplete = JSON.json(Dict(
+            "jobComplete"  => false,
+            "jobReference" => Dict("projectId" => "proj", "jobId" => "job-poll"),
+        ))
+        complete = bq_integer_response(; x_values=Int64[5, 6])
+        server = HTTP.serve!(port) do _req
+            hits[] += 1
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                          hits[] == 1 ? incomplete : complete)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+            rows = query(client, "SELECT x FROM t"; poll_timeout=10.0)
+            # スキーマは最初の complete ページから取得される（incomplete ページに
+            # schema は無い）
+            @test [r.x for r in rows] == [5, 6]
+            @test hits[] >= 2
+        finally
+            close(server)
+        end
+    end
+
+    @testset "query poll_timeout throws TimeoutError (mock server)" begin
+        port = free_port()
+        stuck = JSON.json(Dict(
+            "jobComplete"  => false,
+            "jobReference" => Dict("projectId" => "proj", "jobId" => "job-stuck"),
+        ))
+        server = HTTP.serve!(port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"], stuck)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+            t = @elapsed @test_throws GoogleApiCore.TimeoutError query(
+                client, "SELECT 1"; poll_timeout=0.5)
+            @test t < 5.0
         finally
             close(server)
         end

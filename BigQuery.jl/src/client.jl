@@ -54,7 +54,8 @@ end
 function _bq_request(client::BQClient, method::String, path::String;
                      query::Union{AbstractDict, Nothing}=nothing,
                      body=nothing,
-                     content_type::Union{String, Nothing}=nothing)
+                     content_type::Union{String, Nothing}=nothing,
+                     idempotent::Bool=false)
     url = "$(client.endpoint)/$(path)"
     if query !== nothing && !isempty(query)
         url *= "?" * URIs.escapeuri(query)
@@ -62,5 +63,6 @@ function _bq_request(client::BQClient, method::String, path::String;
     headers = _request_headers(; content_type=content_type)
     payload = body === nothing ? "" : body
     return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
-                                               sign! = _make_signer(client))
+                                               sign! = _make_signer(client),
+                                               idempotent=idempotent)
 end

@@ -67,7 +67,8 @@ function _make_signer(client::PubSubClient)
 end
 
 function _request(client::PubSubClient, method::String, path::AbstractString;
-                  query=nothing, body=nothing, content_type=nothing)
+                  query=nothing, body=nothing, content_type=nothing,
+                  idempotent::Bool=false)
     url = "$(client.endpoint)/$(path)"
     if query !== nothing && !isempty(query)
         url *= "?" * URIs.escapeuri(query)
@@ -75,7 +76,8 @@ function _request(client::PubSubClient, method::String, path::AbstractString;
     headers = _headers(; content_type=content_type)
     payload = body === nothing ? "" : body
     return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
-                                               sign! = _make_signer(client))
+                                               sign! = _make_signer(client),
+                                               idempotent=idempotent)
 end
 
 include("topics.jl")
