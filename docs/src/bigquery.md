@@ -39,6 +39,30 @@ tbl = GoogleBigQuery.query(bq, "SELECT 1 AS x UNION ALL SELECT 2"; format=:arrow
 collect(tbl.x)   # [1, 2]
 ```
 
+### DataFrames and Tables.jl
+
+The default `Vector{NamedTuple}` result is a [Tables.jl](https://github.com/JuliaData/Tables.jl)
+row table, so it flows directly into any Tables.jl sink — most commonly
+`DataFrames.DataFrame`:
+
+```julia
+using DataFrames, GoogleBigQuery
+
+rows = query(bq, "SELECT id, name, created_at FROM `proj.ds.t`")
+df = DataFrame(rows)        # columns: id, name, created_at
+```
+
+It also works with `Tables.columntable`, `CSV.write`, `Arrow.write`, and
+similar consumers without any conversion step:
+
+```julia
+using Tables
+ct = Tables.columntable(rows)   # NamedTuple of column vectors
+```
+
+`missing` values (from SQL `NULL`) are preserved, so columns become
+`Vector{Union{Missing, T}}` where appropriate.
+
 ## Datasets
 
 ```@docs
