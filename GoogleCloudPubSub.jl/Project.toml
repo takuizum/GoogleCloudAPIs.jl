@@ -1,7 +1,7 @@
 name = "GoogleCloudPubSub"
 uuid = "1a5f873f-a1d6-4e7b-91c4-4c6e3977c38e"
-authors = ["Takumi Itamiya"]
 version = "0.1.0"
+authors = ["Takumi Itamiya"]
 
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -11,22 +11,22 @@ HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
-
-[targets]
-test = ["Test", "Aqua", "Sockets"]
-
 [compat]
-julia = "1.10"
+Aqua = "0.8"
 Base64 = "1"
 GoogleApiCore = "0.1"
 GoogleAuth = "0.1"
-HTTP = "1"
+HTTP = "1, 2"
 JSON = "0.21, 1"
 Sockets = "1"
-URIs = "1"
 Test = "1"
-Aqua = "0.8"
+URIs = "1"
+julia = "1.10"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "Aqua", "Sockets"]
