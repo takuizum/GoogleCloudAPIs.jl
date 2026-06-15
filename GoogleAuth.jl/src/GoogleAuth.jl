@@ -12,7 +12,7 @@ import Sockets
 
 export Credentials, Token, ServiceAccountCredentials, UserCredentials, ComputeCredentials
 export ImpersonatedCredentials, CachedCredentials, ExternalAccountCredentials
-export get_application_default, get_token, authorization_header
+export get_application_default, get_token, authorization_header, make_signer
 export with_scopes
 export authorize_via_browser, open_url
 

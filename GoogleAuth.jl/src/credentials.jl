@@ -351,3 +351,20 @@ function authorization_header(creds::Credentials)
     token = get_token(creds)
     return "Authorization" => "Bearer $(token.access_token)"
 end
+
+"""
+    make_signer(creds; is_emulator=false) -> Union{Function, Nothing}
+
+Return a `sign!` closure `(::HTTP.Request) -> Nothing` that pushes a fresh
+`Authorization` header onto each request, suitable for
+`GoogleApiCore.do_request_with_retry`/`service_request`. Returns `nothing` when
+no authentication is needed — i.e. `creds === nothing` or `is_emulator=true` —
+which the retry layer treats as "send unsigned".
+
+The closure calls [`authorization_header`](@ref) on every invocation, so a
+`CachedCredentials` source refreshes its token transparently across retries.
+"""
+function make_signer(creds::Union{Credentials, Nothing}; is_emulator::Bool=false)
+    (is_emulator || creds === nothing) && return nothing
+    return req -> push!(req.headers, authorization_header(creds))
+end
