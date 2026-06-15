@@ -18,51 +18,21 @@ function BQClient(project_id::String;
                   creds::Union{GoogleAuth.Credentials, Nothing}=nothing,
                   endpoint::Union{String, Nothing}=nothing,
                   location::String="US")
-    if endpoint === nothing
-        emulator_host = get(ENV, "BIGQUERY_EMULATOR_HOST", "")
-        if !isempty(emulator_host)
-            ep = startswith(emulator_host, "http") ? emulator_host : "http://$(emulator_host)"
-            return BQClient(project_id, nothing, ep, true, location)
-        else
-            resolved = creds === nothing ? GoogleAuth.get_application_default() : creds
-            return BQClient(project_id, resolved, "https://bigquery.googleapis.com", false, location)
-        end
-    end
-    is_emu = startswith(endpoint, "http://")
-    resolved_creds = is_emu ? nothing : (creds === nothing ? GoogleAuth.get_application_default() : creds)
-    return BQClient(project_id, resolved_creds, endpoint, is_emu, location)
-end
-
-function _request_headers(; content_type::Union{String, Nothing}=nothing)
-    headers = Pair{String, String}[]
-    if content_type !== nothing
-        push!(headers, "Content-Type" => content_type)
-    end
-    return headers
-end
-
-# Returns a sign! callback that injects a fresh Authorization header on each
-# retry attempt, ensuring tokens refreshed by CachedCredentials are used.
-function _make_signer(client::BQClient)
-    if client.is_emulator || client.creds === nothing
-        return nothing
-    end
-    creds = client.creds
-    return req -> push!(req.headers, GoogleAuth.authorization_header(creds))
+    ep, is_emu = GoogleApiCore.resolve_endpoint(;
+        emulator_host = get(ENV, "BIGQUERY_EMULATOR_HOST", ""),
+        explicit      = endpoint,
+        production    = "https://bigquery.googleapis.com")
+    resolved = is_emu ? nothing : (creds === nothing ? GoogleAuth.get_application_default() : creds)
+    return BQClient(project_id, resolved, ep, is_emu, location)
 end
 
 function _bq_request(client::BQClient, method::String, path::String;
                      query::Union{AbstractDict, Nothing}=nothing,
                      body=nothing,
                      content_type::Union{String, Nothing}=nothing,
-                     idempotent::Bool=false)
-    url = "$(client.endpoint)/$(path)"
-    if query !== nothing && !isempty(query)
-        url *= "?" * URIs.escapeuri(query)
-    end
-    headers = _request_headers(; content_type=content_type)
-    payload = body === nothing ? "" : body
-    return GoogleApiCore.do_request_with_retry(method, url, headers, payload;
-                                               sign! = _make_signer(client),
-                                               idempotent=idempotent)
+                     idempotent::Bool=false, kwargs...)
+    return GoogleApiCore.service_request(method, client.endpoint, path;
+        query=query, body=body, content_type=content_type,
+        sign! = GoogleAuth.make_signer(client.creds; is_emulator=client.is_emulator),
+        idempotent=idempotent, kwargs...)
 end

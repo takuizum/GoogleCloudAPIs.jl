@@ -214,6 +214,71 @@ get_next_token(::SzPage) = nothing
         end
     end
 
+    # ── resolve_endpoint ─────────────────────────────────────
+    @testset "resolve_endpoint" begin
+        re = GoogleApiCore.resolve_endpoint
+        # explicit wins; http:// => emulator, https:// => production
+        @test re(; explicit="http://127.0.0.1:9050", production="https://x") ==
+              ("http://127.0.0.1:9050", true)
+        @test re(; explicit="https://custom.example", production="https://x") ==
+              ("https://custom.example", false)
+        # emulator_host env style: scheme added when missing, marked emulator
+        @test re(; emulator_host="localhost:8085", production="https://x") ==
+              ("http://localhost:8085", true)
+        @test re(; emulator_host="http://localhost:4443", production="https://x") ==
+              ("http://localhost:4443", true)
+        # fallback to production
+        @test re(; production="https://storage.googleapis.com") ==
+              ("https://storage.googleapis.com", false)
+        # explicit takes precedence over emulator_host
+        @test re(; emulator_host="localhost:1", explicit="https://p", production="https://x") ==
+              ("https://p", false)
+    end
+
+    # ── service_request ──────────────────────────────────────
+    @testset "service_request: builds URL, query, content-type, sign!" begin
+        seen = Ref{Tuple{String,HTTP.Headers}}()
+        port = free_port()
+        server = HTTP.serve!(port) do req
+            seen[] = (req.target, req.headers)
+            HTTP.Response(200, ["Content-Type" => "application/json"], """{"ok":true}""")
+        end
+        try
+            signer = req -> push!(req.headers, "Authorization" => "Bearer T")
+            resp = service_request("GET", "http://127.0.0.1:$port", "v1/things";
+                query=Dict("a" => "1", "b" => "x y"),
+                content_type="application/json", sign! = signer)
+            @test resp.status == 200
+            target, hdrs = seen[]
+            @test startswith(target, "/v1/things?")
+            @test occursin("a=1", target)
+            @test occursin("b=x%20y", target) || occursin("b=x+y", target)  # space-encoded
+            @test any(h -> h[1] == "Content-Type" && h[2] == "application/json", hdrs)
+            @test any(h -> h[1] == "Authorization" && h[2] == "Bearer T", hdrs)
+        finally
+            close(server)
+        end
+    end
+
+    @testset "service_request: nothing signer sends unsigned, idempotent retries" begin
+        hits = Ref(0)
+        port = free_port()
+        server = HTTP.serve!(port) do req
+            hits[] += 1
+            HTTP.Response(hits[] == 1 ? 503 : 200, "{}")
+        end
+        try
+            cfg = RetryConfig(initial_delay=0.0, max_attempts=3)
+            resp = service_request("POST", "http://127.0.0.1:$port", "p";
+                body="{}", content_type="application/json",
+                sign! = nothing, idempotent=true, config=cfg)
+            @test resp.status == 200
+            @test hits[] == 2
+        finally
+            close(server)
+        end
+    end
+
     # ── PagedIterator ────────────────────────────────────────
     @testset "PagedIterator: single page" begin
         iter = PagedIterator(_ -> OnePage([10, 20, 30]))
