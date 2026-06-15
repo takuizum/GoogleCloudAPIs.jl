@@ -142,6 +142,24 @@ end
         end
     end
 
+    @testset "download_object streams large payload into IO (mock server)" begin
+        # ~256 KiB to exercise the streaming (response_stream) path beyond a
+        # single buffer; the bytes must arrive intact and in order.
+        content = rand(UInt8, 256 * 1024)
+        port = free_port()
+        server = HTTP.serve!(port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/octet-stream"], content)
+        end
+        try
+            client = GoogleCloudStorage.Client("proj", nothing, "http://127.0.0.1:$port", true)
+            buf = IOBuffer()
+            download_object(client, "bkt", "big.bin", buf)
+            @test take!(buf) == content
+        finally
+            close(server)
+        end
+    end
+
     # ── upload_object via mock server (three data forms) ─────
     @testset "upload_object with Vector{UInt8} (mock server)" begin
         port = free_port()

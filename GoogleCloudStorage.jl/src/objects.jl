@@ -70,7 +70,15 @@ end
     download_object(client, bucket, name) -> Vector{UInt8}
     download_object(client, bucket, name, io) -> Nothing
 
-Fetch the object body. The second form writes bytes into the provided `IO`.
+Fetch the object body. The second form streams the body directly into the
+provided `IO` (e.g. an open file) without buffering the whole object in memory,
+so it is suitable for large objects:
+
+```julia
+open("local.bin", "w") do io
+    download_object(gcs, "my-bucket", "big.bin", io)
+end
+```
 """
 function download_object(client::Client, bucket::AbstractString, name::AbstractString)
     path = "storage/v1/b/$(URIs.escapeuri(bucket))/o/$(URIs.escapeuri(name))"
@@ -79,7 +87,8 @@ function download_object(client::Client, bucket::AbstractString, name::AbstractS
 end
 
 function download_object(client::Client, bucket::AbstractString, name::AbstractString, io::IO)
-    write(io, download_object(client, bucket, name))
+    path = "storage/v1/b/$(URIs.escapeuri(bucket))/o/$(URIs.escapeuri(name))"
+    _request(client, "GET", path; query=Dict("alt" => "media"), response_stream=io)
     return nothing
 end
 
@@ -87,13 +96,23 @@ end
     upload_object(client, bucket, name, data; content_type="application/octet-stream") -> Object
 
 Simple (non-resumable) upload. `data` may be `Vector{UInt8}`, `AbstractString`,
-or `IO`. Uses `uploadType=media` — for large payloads, prefer a resumable
-upload (planned for v0.2).
+or `IO`. An `IO` is streamed as the request body without being read into memory
+first, so large files can be uploaded from an open handle:
+
+```julia
+open("big.bin") do io
+    upload_object(gcs, "my-bucket", "big.bin", io)
+end
+```
+
+Uses `uploadType=media` — for resumable/multipart uploads, see the roadmap.
 """
 function upload_object(client::Client, bucket::AbstractString, name::AbstractString,
                        data::Union{AbstractVector{UInt8}, AbstractString, IO};
                        content_type::AbstractString="application/octet-stream")
-    body = data isa IO ? read(data) : (data isa AbstractString ? Vector{UInt8}(data) : data)
+    # IO is passed through so the transport layer streams it; bytes/strings are
+    # normalized to a byte vector.
+    body = data isa IO ? data : (data isa AbstractString ? Vector{UInt8}(data) : data)
     # GCS uses an upload-specific host on production but the same host on the
     # fake emulator. We always route relative to client.endpoint, which matches
     # both fake-gcs-server and the production "storage.googleapis.com" host

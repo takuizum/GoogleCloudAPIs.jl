@@ -75,24 +75,48 @@ token is used automatically.
 retry of 429/5xx responses for methods other than GET/PUT (notably POST).
 A `Retry-After` header with an integer number of seconds is honoured (capped
 at `config.max_delay`).
+
+Streaming is supported via the forwarded `kwargs`:
+- An `IO` `body` is streamed as the request body (not buffered into memory);
+  such requests are never retried, since a consumed stream cannot be replayed.
+- A `response_stream` IO captures the response body incrementally. When a
+  retry occurs and the stream is seekable, it is rewound and truncated first so
+  bytes from the failed attempt do not accumulate.
 """
 function do_request_with_retry(method::String, url::String, headers=[], body="";
                                 config::RetryConfig=RetryConfig(),
                                 sign! = nothing,
                                 idempotent::Bool=false,
                                 kwargs...)
-    body_bytes = body isa AbstractString ? Vector{UInt8}(codeunits(body)) : body
+    is_io_body = body isa IO
+    body_bytes = body isa AbstractString ? Vector{UInt8}(codeunits(body)) :
+                 (is_io_body ? UInt8[] : body)
+    resp_stream = get(values(kwargs), :response_stream, nothing)
     attempt = 0
     while true
         attempt += 1
 
-        req = HTTP.Request(method, url, copy(headers), copy(body_bytes))
+        # Rewind a seekable response_stream before re-attempting so a retried
+        # streaming download does not accumulate bytes from the failed attempt.
+        if attempt > 1 && resp_stream !== nothing
+            try
+                seekstart(resp_stream)
+                truncate(resp_stream, 0)
+            catch
+            end
+        end
+
+        # Build the request for header signing; an IO body is sent separately
+        # so it streams instead of being copied into the request.
+        req = HTTP.Request(method, url, copy(headers), is_io_body ? UInt8[] : copy(body_bytes))
         sign! !== nothing && sign!(req)
-        resp = HTTP.request(req.method, req.target, req.headers, req.body;
+        send_body = is_io_body ? body : req.body
+        resp = HTTP.request(req.method, req.target, req.headers, send_body;
                             status_exception=false, kwargs...)
 
-        if attempt >= config.max_attempts ||
-           !should_retry(method, resp.status; idempotent=idempotent)
+        # A consumed IO body cannot be replayed, so never retry those.
+        retryable = !is_io_body && should_retry(method, resp.status; idempotent=idempotent)
+        if attempt >= config.max_attempts || !retryable
             if resp.status == 401 || resp.status == 403
                 throw(AuthError(_parse_api_error_body(resp.body, resp.status)))
             elseif resp.status == 404
