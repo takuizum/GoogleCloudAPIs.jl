@@ -279,6 +279,51 @@ get_next_token(::SzPage) = nothing
         end
     end
 
+    @testset "do_request_with_retry: response_stream reset on retry (no accumulation)" begin
+        # First attempt 503s (writes an error body to the stream); a seekable
+        # stream must be rewound so the retried success body is the only content.
+        hits = Ref(0)
+        port = free_port()
+        server = HTTP.serve!(port) do _req
+            hits[] += 1
+            hits[] == 1 ? HTTP.Response(503, "transient error body") :
+                          HTTP.Response(200, "OK BODY")
+        end
+        try
+            cfg = RetryConfig(initial_delay=0.0, max_attempts=3)
+            buf = IOBuffer()
+            resp = do_request_with_retry("GET", "http://127.0.0.1:$port/", [], "";
+                                         config=cfg, response_stream=buf)
+            @test resp.status == 200
+            @test hits[] == 2
+            @test String(take!(buf)) == "OK BODY"   # error body did not accumulate
+        finally
+            close(server)
+        end
+    end
+
+    @testset "do_request_with_retry: IO body streams and is not retried" begin
+        hits = Ref(0)
+        bodies = String[]
+        port = free_port()
+        server = HTTP.serve!(port) do req
+            hits[] += 1
+            push!(bodies, String(req.body))
+            HTTP.Response(200, "{}")
+        end
+        try
+            cfg = RetryConfig(initial_delay=0.0, max_attempts=3)
+            io = IOBuffer(Vector{UInt8}("streamed-upload"))
+            resp = do_request_with_retry("POST", "http://127.0.0.1:$port/", [], io;
+                                         config=cfg, idempotent=true)
+            @test resp.status == 200
+            @test hits[] == 1
+            @test bodies[1] == "streamed-upload"
+        finally
+            close(server)
+        end
+    end
+
     # ── PagedIterator ────────────────────────────────────────
     @testset "PagedIterator: single page" begin
         iter = PagedIterator(_ -> OnePage([10, 20, 30]))
