@@ -7,6 +7,7 @@ using HTTP
 using JSON
 using Aqua
 import Sockets
+import Tables
 import GoogleApiCore
 import GoogleAuth
 import GoogleAuth: get_token  # extend for stub creds
@@ -188,6 +189,27 @@ end
             @test r.tags == [1, 2]
             @test r.rec == (city = "Tokyo",)
             @test r.maybe === missing
+        finally
+            close(server)
+        end
+    end
+
+    @testset "query result is a Tables.jl row table" begin
+        port = free_port()
+        body = bq_json_response(; rows=[[1, "a"], [2, "b"]],
+                                   fields=[("id", "INTEGER"), ("name", "STRING")])
+        server = HTTP.serve!(port) do _req
+            HTTP.Response(200, ["Content-Type" => "application/json"], body)
+        end
+        try
+            client = BQClient("proj", nothing, "http://127.0.0.1:$port", true, "US")
+            rows = query(client, "SELECT id, name FROM t")
+            # Vector{NamedTuple} は Tables.jl の row table として消費できる
+            ct = Tables.columntable(rows)
+            @test ct.id == [1, 2]
+            @test ct.name == ["a", "b"]
+            @test Tables.rowcount(Tables.columns(rows)) == 2
+            @test collect(Tables.columnnames(Tables.columns(rows))) == [:id, :name]
         finally
             close(server)
         end
