@@ -172,13 +172,16 @@ get_next_token(::SzPage) = nothing
 
     @testset "do_request_with_retry: Retry-After overrides backoff" begin
         # initial_delay=5.0 のままだと 1 回のリトライに 5 秒以上かかるが、
-        # Retry-After: 0 が優先されれば 1 秒未満で完了する。
+        # Retry-After: 0 が優先されれば大幅に短く完了する。しきい値は CI
+        # ランナーの HTTP 接続確立オーバーヘッド（HTTP.jl のバージョンや
+        # 負荷状況で数百ms〜1.x秒変動する）を吸収しつつ、5秒のバックオフが
+        # 無視されなかった場合とは十分に区別できる 3 秒に設定している。
         with_mock_server([429, 200], ["{}", """{"done":true}"""];
                          headers=[["Retry-After" => "0"], Pair{String,String}[]]) do url
             cfg = RetryConfig(initial_delay=5.0, max_attempts=3)
             t = @elapsed resp = do_request_with_retry("GET", url, [], ""; config=cfg)
             @test resp.status == 200
-            @test t < 1.0
+            @test t < 3.0
         end
     end
 
