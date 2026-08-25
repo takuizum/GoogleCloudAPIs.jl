@@ -10,12 +10,17 @@ This is a monorepo of independently versioned packages
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### GoogleApiCore
 - `do_request_with_retry` / `should_retry` gained an `idempotent` keyword so callers
   can opt non-GET/PUT requests into 429/5xx retry.
 - Integer `Retry-After` response headers are now honoured (capped at `max_delay`).
 - Added `TimeoutError` for client-side deadlines.
 - Retry log demoted from `@info` to `@debug`.
+- Added `resolve_endpoint` and `service_request`, shared client plumbing
+  (endpoint/emulator resolution, retryable request building) extracted out of
+  the three service packages' near-duplicate client code.
 
 ### GoogleAuth
 - Added `ExternalAccountCredentials` — Workload Identity Federation
@@ -34,8 +39,18 @@ This is a monorepo of independently versioned packages
 - `query` gained `poll_timeout` (default 600s) and no longer polls forever on a
   stuck job.
 
+### GoogleCloudStorage
+- `download_object`/`upload_object` gained `IO`-streaming forms so large
+  objects no longer have to be buffered fully in memory.
+
+### GoogleCloudPubSub
+- No package-level changes; picks up the `GoogleApiCore` client-plumbing
+  refactor transitively.
+
 ### Compatibility
 - All packages widened JSON compat to `"0.21, 1"`.
+- All packages widened HTTP compat to `"1, 2"`.
+- CI now also tests against Julia 1.12, alongside 1.10/1.11.
 
 ## [0.1.0]
 
@@ -64,5 +79,6 @@ Initial release of the monorepo.
 ### GoogleCloudPubSub
 - Topic and subscription CRUD; publish (single/batch), pull, acknowledge.
 
-[Unreleased]: https://github.com/takuizum/GoogleCloudAPIs.jl/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/takuizum/GoogleCloudAPIs.jl/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/takuizum/GoogleCloudAPIs.jl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/takuizum/GoogleCloudAPIs.jl/releases/tag/v0.1.0

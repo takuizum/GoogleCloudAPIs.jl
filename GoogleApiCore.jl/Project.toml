@@ -1,7 +1,7 @@
 name = "GoogleApiCore"
 uuid = "5b46693f-3346-4d48-b018-2afc076565e2"
 authors = ["Takumi Itamiya"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"

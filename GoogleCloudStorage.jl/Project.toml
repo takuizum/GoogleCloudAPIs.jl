@@ -1,7 +1,7 @@
 name = "GoogleCloudStorage"
 uuid = "7a95fb5f-a5a2-4f82-9cda-bd4cc307a60f"
 authors = ["Takumi Itamiya"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 GoogleApiCore = "5b46693f-3346-4d48-b018-2afc076565e2"
@@ -20,8 +20,8 @@ test = ["Test", "Aqua", "Sockets"]
 
 [compat]
 julia = "1.10"
-GoogleApiCore = "0.1"
-GoogleAuth = "0.1"
+GoogleApiCore = "0.1, 0.2"
+GoogleAuth = "0.1, 0.2"
 HTTP = "1, 2"
 JSON = "0.21, 1"
 Sockets = "1"
