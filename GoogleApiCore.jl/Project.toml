@@ -19,7 +19,7 @@ test = ["Test", "Aqua", "Logging", "Sockets"]
 
 [compat]
 julia = "1.10"
-HTTP = "1"
+HTTP = "1, 2"
 JSON = "0.21, 1"
 URIs = "1"
 Logging = "1"

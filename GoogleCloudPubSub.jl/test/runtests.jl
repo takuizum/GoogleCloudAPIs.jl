@@ -107,7 +107,7 @@ get_token(::MockPSCreds) = GoogleAuth.Token("mock-ps-token", 3600, "Bearer")
                 return HTTP.Response(200, ["Content-Type" => "application/json"], body_pull)
             elseif endswith(req.target, ":acknowledge")
                 # Verify ack_ids
-                doc = JSON.parse(IOBuffer(req.body))
+                doc = JSON.parse(String(req.body))
                 @assert "ACK-1" in [String(x) for x in doc["ackIds"]]
                 return HTTP.Response(200, "{}")
             end

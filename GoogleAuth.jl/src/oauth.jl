@@ -95,7 +95,7 @@ function _start_callback_server(port::Int, expected_state::AbstractString;
     bind_host::AbstractString="127.0.0.1")
     result = Channel{Any}(1)
     host_ip = Sockets.getaddrinfo(bind_host)
-    server = HTTP.serve!(host_ip, port) do req
+    server = HTTP.serve!(string(host_ip), port) do req
         try
             uri = URIs.URI(req.target)
             q = URIs.queryparampairs(uri)

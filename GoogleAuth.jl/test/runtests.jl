@@ -593,7 +593,7 @@ GoogleAuth.get_token(::StubCredentials) = Token("stub-access-token", 3600, "Bear
         expire_str = Dates.format(expire_dt, "yyyy-mm-ddTHH:MM:SS") * "Z"
 
         iam_server = HTTP.serve!(iam_port) do req
-            received[]      = JSON.parse(IOBuffer(req.body))
+            received[]      = JSON.parse(String(req.body))
             received_auth[] = something(HTTP.header(req, "Authorization"), "")
             resp_body = JSON.json(Dict(
                 "accessToken" => "IMPERSONATED_TOKEN",
