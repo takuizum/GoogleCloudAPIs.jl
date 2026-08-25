@@ -411,10 +411,11 @@ flowchart TD
     C --> H{json.type}
     H -- service_account --> I[ServiceAccountCredentials]
     H -- authorized_user --> J[UserCredentials]
-    H -- external_account --> K[error: WIF<br/>未実装]
+    H -- external_account --> K[ExternalAccountCredentials<br/>WIF: STS exchange<br/>+ optional impersonation]
 
     I --> L[CachedCredentials wrap]
     J --> L
+    K --> L
     F --> L
     L --> M[return]
 ```
@@ -893,19 +894,28 @@ flowchart LR
 
 `AGENT.md` / 各 `README.md` および `Spec.md` に明示された範囲:
 
-### 現状未実装（v0.1 で意図的に省略）
+### 現状未実装
 
 | 領域 | 制限 | 将来計画 |
 |------|------|----------|
-| BigQuery Storage Read API | gRPC 必要のため未実装 | `GoogleBigQueryStorage.jl` 別パッケージ |
+| BigQuery Storage Read API | gRPC 必要のため未実装 | `GoogleBigQueryStorage.jl` 別パッケージ（[#26](https://github.com/takuizum/GoogleCloudAPIs.jl/issues/26)） |
 | GCS Resumable Upload | simple upload (`uploadType=media`) のみ | v0.2 |
 | GCS V4 Signed URLs | 未実装 | v0.2 |
+| GCS 条件付きリクエスト（`ifGenerationMatch` 等） | 未実装 | 将来 |
 | Pub/Sub Streaming Pull | pull のみ | 将来 |
-| Pub/Sub Push / Ordering Keys / Dead Letter | 未実装 | 将来 |
-| Workload Identity Federation | `external_account` JSON で `error` を投げる | 将来 |
+| Pub/Sub Push / Ordering Keys / Dead Letter / `modifyAckDeadline` / seek | 未実装 | 将来 |
 | gRPC 全般 | REST のみ | `gRPCClient.jl` + `ProtoBuf.jl` で将来対応 |
 | LRO (AIP-151) | スケルトン実装 (`lro.jl`) | 各サービスで本実装が必要 |
 | Discovery Service コード生成 | プロトタイプ (`Discovery.generate_api`) | メタプログラミングで型安全メソッドを自動生成 |
+
+以下は当初 v0.1 で省略予定だったが、`[Unreleased]`（[CHANGELOG.md](CHANGELOG.md)）で実装済み:
+
+| 領域 | 状態 |
+|------|------|
+| Workload Identity Federation（`external_account`） | 実装済み — file/url ソースの subject token、STS 交換、SA impersonation 対応（AWS/executable ソースは未対応） |
+| BigQuery パラメータ化クエリ | 実装済み — named (`Dict`) / positional (`Vector`) |
+| BigQuery 結果型のフル変換 | 実装済み — TIMESTAMP/DATE/TIME/BYTES/RECORD/REPEATED 等 |
+| GCS ストリーミング download/upload | 実装済み — `IO` を渡すとメモリにバッファしない |
 
 ### Spec.md が指定した実装フェーズ
 
